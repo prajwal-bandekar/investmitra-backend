@@ -44,6 +44,24 @@ DTO shapes are in `web/dto/Dtos.java` and `web/dto/PriceView.java`.
 | POST `/watchlist` | `{symbol, targetPrice? (>= 0)}` | `WatchlistView` (adds or updates target) |
 | DELETE `/watchlist/{symbol}` | | `data: null`; 404 if not on list |
 
+## ExpenseMitra (real-life spending; all rows scoped to `X-User-Id`)
+Months are `YYYY-MM`; omitted means the current IST month; anything else gives 400. Someone else's expense or custom category answers 404.
+
+| Method, path | Request | Response |
+|---|---|---|
+| GET `/expense-categories` | | `CategoryView[] {id, name, icon, want, custom}` (shared defaults first) |
+| POST `/expense-categories` | `{name, icon?, want?}` | 201 `CategoryView`; 409 if the name exists for the user |
+| PUT `/expense-categories/{id}` | `{name, icon?, want?}` | `CategoryView`; 403 on a shared default |
+| DELETE `/expense-categories/{id}` | | archives a custom category (past expenses keep it) |
+| GET `/expenses?month&categoryId&paymentMode` | | `ExpenseView[] {id, amount, categoryId, category, icon, spentOn, paymentMode, source, note, createdAt}`, newest first |
+| POST `/expenses` | `{amount (>= 0.01, 2dp), categoryId, spentOn?, paymentMode?, note? (200), source?}` | 201 `ExpenseView`; defaults: today IST, `UPI`, `MANUAL` |
+| PUT / DELETE `/expenses/{id}` | same body | `ExpenseView` / `data: null` |
+| GET `/expenses/summary?month` | | `MonthSummary {month, total, lastMonthTotal, overallBudget, byCategory[CategorySpend {categoryId, name, icon, want, spent, count, budget}], couldHaveBought[WishCard]}` |
+| GET `/budgets?month` | | `BudgetView[] {categoryId (null = overall), category, limit}` |
+| PUT `/budgets` | `{month, items[{categoryId?, limit?}]}` | upserts listed items; null or 0 limit removes; returns the month's `BudgetView[]` |
+
+`WishCard {categoryId, category, icon, spent, productName, productImage, productPrice, count, progressPercent, investSymbol, investShares}`; see business-logic.md.
+
 ## Admin price job (no auth yet)
 | Method, path | Response |
 |---|---|

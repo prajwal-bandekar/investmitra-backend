@@ -84,3 +84,15 @@ Format: date, decision, why, alternatives rejected, status. Dates are when the d
 - **Decision:** Treat it as unrelated: it points to an AWS RDS PostgreSQL, not this app's local MySQL.
 - **Why:** Different engine and host.
 - **Status:** Open question: is that RDS instance still billing? (see open-issues.md)
+
+## D15 ExpenseMitra lives inside this backend (2026-10-12)
+- **Decision:** Build expense tracking as package `com.investmitra.expense` in the same app, database and `X-User-Id` auth.
+- **Why:** One login and one deploy; the could-have-bought card reuses stored stock prices.
+- **Rejected:** A separate service or repo (second deploy, duplicated auth).
+- **Status:** Done (MVP F1 to F6 of the PRD).
+
+## D16 Could-have-bought uses year-to-date spend (2026-10-12)
+- **Decision:** Cards compare products against spend from 1 Jan of the selected month's year; products come from an admin-editable `WishProduct` table.
+- **Why:** One month of food delivery rarely reaches an iPhone; the year total makes the comparison land.
+- **Rejected:** Month-only spend; hardcoded prices in the frontend.
+- **Status:** Done. Phase 2: SMS auto-capture (Android) per the PRD.

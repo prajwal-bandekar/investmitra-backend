@@ -27,6 +27,13 @@ Base path: `src/main/java/com/investmitra/`. Constructor injection everywhere.
 - **WatchlistService**: `list`, `add` (upsert target price), `remove` (404 if absent); `targetReached` = close <= target.
 - **PositionMath**: pure helpers `averageAfterBuy`, `realizedPnl`, `amount`, `percent`.
 
+## expense (ExpenseMitra, self-contained package)
+- Entities `Expense`, `ExpenseCategory`, `Budget`, `WishProduct`; enums `PaymentMode`, `ExpenseSource`; repositories for each.
+- **ExpenseService**: categories CRUD (own only), expense CRUD (404 for others' rows), `saveBudgets` upsert, `summary(month)` with `card(...)` for could-have-bought.
+- **ExpenseController** `/api/expense-categories`, `/api/expenses`, `/api/expenses/summary`, `/api/budgets`.
+- **ExpenseSeeder**: seeds default categories and wish products when their tables are empty.
+- **ExpenseDtos**: request/response records for the module.
+
 ## repository (Spring Data)
 `AppUserRepository` (`findByIdForUpdate` with PESSIMISTIC_WRITE, `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`), `StockRepository` (`findBySymbolIgnoreCase`, `findByAvSymbolIsNotNull`, `search`, `sectorSummary`), `StockPriceRepository` (`findTopByStockOrderByTradeDateDesc`, `findByStockAndTradeDate`, `findLatestFor(ids)`), `HoldingRepository` (`findByPortfolioAndStock`, `findByPortfolio`, `findByPortfolioIn`, `findManagedByUserIn`), `PortfolioRepository` (`findManagedBy(userId)`), `TradeRepository` (`totalRealizedPnl`, `findByPortfolioNewestFirst`), `WatchlistItemRepository`, `JobRunRepository` (`findTop20ByOrderByStartedAtDesc`, `callsMadeSince(instant)`).
 
