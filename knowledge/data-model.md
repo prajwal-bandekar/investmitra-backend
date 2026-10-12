@@ -12,6 +12,10 @@ MySQL 8 schema `investmitra`, created by Hibernate (`ddl-auto=update`, no migrat
 | **Trade** (`trade`) | id, portfolio_id, stock_id, placedBy_id, side (`BUY`/`SELL`), quantity, price (19,4), amount (19,2), realizedPnl (nullable, sells only), executedAt (Instant) | immutable log |
 | **WatchlistItem** (`watchlist_item`) | id, user_id, stock_id, targetPrice (19,4, nullable), addedOn | unique (user_id, stock_id) |
 | **JobRun** (`job_run`) | id, run_trigger (`SCHEDULED`/`MANUAL`/`ON_DEMAND`), startedAt, finishedAt, status (`RUNNING`/`SUCCESS`/`PARTIAL`/`FAILED`), callsMade, pricesSaved, failures, notes (2000) | audit; sum of callsMade since IST midnight is the quota used |
+| **ExpenseCategory** (`expense_category`) | id, user_id (null = shared default), name, icon, want, archived | 10 defaults seeded by `ExpenseSeeder` |
+| **Expense** (`expense`) | id, user_id, category_id, amount (19,2), spentOn, paymentMode (`UPI`/`CASH`/`CARD`/`NETBANKING`/`OTHER`), source (`MANUAL`/`SMS`), note, createdAt | index (user_id, spentOn) |
+| **Budget** (`budget`) | id, user_id, category_id (null = overall cap), month (column `budget_month`, `YYYY-MM`; `month` is reserved in H2), limitAmount (19,2) | unique (user_id, category_id, budget_month); MySQL allows duplicate NULLs, so the service upserts the overall row itself |
+| **WishProduct** (`wish_product`) | id, name (unique), price (19,2), image (illustration key), active | 9 seeded, approximate Indian prices; edit rows to update |
 
 ## Relationships
 ```
@@ -19,6 +23,7 @@ AppUser 1--* Portfolio (owner)      AppUser 1--* Portfolio (advisor)
 Portfolio 1--* Holding *--1 Stock   Portfolio 1--* Trade *--1 Stock
 Trade *--1 AppUser (placedBy)       AppUser 1--* WatchlistItem *--1 Stock
 Stock 1--* StockPrice
+AppUser 1--* Expense *--1 ExpenseCategory   AppUser 1--* Budget *--0..1 ExpenseCategory
 ```
 Notes: cash is per user, not per portfolio. Table names are Spring's default snake_case of the entity names (not independently checked in MySQL). The column is `run_trigger` because `trigger` is a reserved word. Enums: `Role`, `TradeSide`, `FetchTrigger`, `JobStatus`.
 Seed data: `Stock` rows come from `nse-500-stocks.json` on first start. Users are not seeded by code.

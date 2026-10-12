@@ -21,3 +21,9 @@ Newest at the bottom. Append one `## YYYY-MM-DD` section per ingest.
 
 ## 2026-10-10
 - Knowledge base created (this folder); initial `.ingest-state.json` written with sha256 hashes (repo has no commits).
+
+## 2026-10-12
+- ExpenseMitra module (`com.investmitra.expense`): categories, expenses, budgets, month summary and could-have-bought cards; default categories and wish products seeded on start.
+- New config `expense.invest-symbol` (default RELIANCE).
+- `ExpenseIntegrationTest` (6 tests).
+- Review fix: renaming a custom expense category to a name the user already has now answers 409.

@@ -16,6 +16,11 @@
 - First real price run against live Alpha Vantage not done yet.
 - Possible unresolved question: DBeaver "papertrading" connection is an AWS RDS PostgreSQL unrelated to this app; is it still billing?
 
+## ExpenseMitra
+- Expense data is personal; real auth must replace `X-User-Id` before ExpenseMitra goes public.
+- `WishProduct` prices are approximate seeds (Oct 2026); no admin UI to edit them yet.
+- Not built yet from the PRD: recurring expenses, income entries, CSV export, SMS auto-capture (phase 2 Android app).
+
 ## Process
-- No git commits yet (ingest uses file hashes until the first commit).
-- Tests: 30 passing. No unit tests for `UserService` edge cases beyond login, nor for the cron wiring of `PriceFetchJob` (`pricejob.cron=-` disables it in tests).
+- Repo now has commits; next ingest should switch `.ingest-state.json` to git mode.
+- Tests: 36 passing. No unit tests for `UserService` edge cases beyond login, nor for the cron wiring of `PriceFetchJob` (`pricejob.cron=-` disables it in tests).

@@ -43,3 +43,11 @@ BCrypt hashes (`BCryptPasswordEncoder`), email lowercased and unique, login erro
 
 ## Watchlist
 One row per (user, stock). POST on an existing symbol updates the target price. `targetReached` is true when `close <= targetPrice` (the target is a buy-below price).
+
+## ExpenseMitra
+- Tracks real spending only; never moves money. Amounts are BigDecimal, 2 decimals HALF_UP, must be > 0.
+- Ownership: every expense, budget and custom category belongs to one user. Other users' ids answer 404 (not 403) so ids can't be probed. Shared defaults are read-only (403 on edit).
+- Defaults: want categories Food delivery, Eating out, Shopping, Entertainment; need categories Groceries, Travel, Rent, Bills, Education, Other.
+- Budgets: per (category, month) plus an overall cap (category null). PUT upserts listed items only; null or 0 removes.
+- Summary: month total, last month total, per-category spend (sorted by spend) with count and budget.
+- **Could-have-bought cards**: for each `want` category with spend from 1 Jan to the end of the selected month (year to date), pick the priciest active `WishProduct` whose price <= spend; `count` = floor(spend / price). If spend is below the cheapest product, show that product with `progressPercent` = floor(spend * 100 / price). `investShares` = floor(spend / last close of `expense.invest-symbol`, default RELIANCE), null when no stored price. Uses stored prices only, so no Alpha Vantage calls.
