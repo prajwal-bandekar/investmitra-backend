@@ -91,7 +91,13 @@ public class ExpenseService {
 	@Transactional
 	public CategoryView updateCategory(Long userId, Long id, CategoryRequest request) {
 		ExpenseCategory c = requireOwnCategory(userId, id);
-		c.setName(request.name().trim());
+		String name = request.name().trim();
+		boolean taken = categories.visibleTo(c.getUser()).stream()
+				.anyMatch(o -> !o.getId().equals(id) && o.getName().equalsIgnoreCase(name));
+		if (taken) {
+			throw ApiException.conflict("You already have a category called " + name);
+		}
+		c.setName(name);
 		if (request.icon() != null) {
 			c.setIcon(request.icon());
 		}

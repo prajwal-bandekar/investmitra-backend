@@ -122,6 +122,8 @@ class ExpenseIntegrationTest {
 				HttpStatus.NOT_FOUND);
 		assertStatus(() -> expenses.updateCategory(me, cat("Rent"), new CategoryRequest("Hostel", null, null)),
 				HttpStatus.FORBIDDEN);
+		assertStatus(() -> expenses.updateCategory(me, mine.id(), new CategoryRequest("rent", null, null)),
+				HttpStatus.CONFLICT);
 	}
 
 	@Test

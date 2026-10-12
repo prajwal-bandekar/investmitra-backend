@@ -26,3 +26,4 @@ Newest at the bottom. Append one `## YYYY-MM-DD` section per ingest.
 - ExpenseMitra module (`com.investmitra.expense`): categories, expenses, budgets, month summary and could-have-bought cards; default categories and wish products seeded on start.
 - New config `expense.invest-symbol` (default RELIANCE).
 - `ExpenseIntegrationTest` (6 tests).
+- Review fix: renaming a custom expense category to a name the user already has now answers 409.
