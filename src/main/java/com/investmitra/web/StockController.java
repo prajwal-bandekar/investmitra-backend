@@ -3,6 +3,7 @@ package com.investmitra.web;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -36,7 +37,7 @@ public class StockController {
 	}
 
 	@GetMapping("/stocks")
-	public ResponseStructure<Page<StockView>> search(@RequestParam(required = false) String query,
+	public ResponseStructure<Page<StockView>> search(@RequestParam(required = false) @Size(max = 50) String query,
 			@RequestParam(required = false) String sector, @RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size,
 			@RequestHeader(name = "X-User-Id", required = false) Long userId) {

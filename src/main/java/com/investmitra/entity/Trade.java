@@ -12,12 +12,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /** Immutable record of an executed buy or sell. */
 @Entity
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = { "portfolio_id", "client_request_id" }))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -56,4 +59,8 @@ public class Trade {
 
 	@Column(nullable = false)
 	private Instant executedAt;
+
+	/** Optional idempotency key from the client; unique per portfolio so a double-submit cannot execute twice. */
+	@Column(name = "client_request_id", length = 64)
+	private String clientRequestId;
 }

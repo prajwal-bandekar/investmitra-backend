@@ -176,6 +176,70 @@ class ExpenseIntegrationTest {
 	}
 
 	@Test
+	void expenseKeepsItsArchivedCategoryOnEditAndStillShowsInSummary() {
+		LocalDate today = today();
+		CategoryView gym = expenses.createCategory(me, new CategoryRequest("Gym", "x", true));
+		ExpenseView e = expenses.create(me, new ExpenseRequest(new BigDecimal("800"), gym.id(), today, null, null, null));
+		expenses.create(me, new ExpenseRequest(new BigDecimal("300"), cat("Rent"), today, null, null, null));
+		expenses.archiveCategory(me, gym.id());
+
+		ExpenseView edited = expenses.update(me, e.id(),
+				new ExpenseRequest(new BigDecimal("900"), gym.id(), today, null, "edited", null));
+		assertThat(edited.amount()).isEqualByComparingTo("900");
+		assertStatus(() -> expenses.create(me, new ExpenseRequest(BigDecimal.TEN, gym.id(), today, null, null, null)),
+				HttpStatus.BAD_REQUEST);
+
+		MonthSummary s = expenses.summary(me, null);
+		assertThat(s.byCategory().stream().map(CategorySpend::spent).reduce(BigDecimal.ZERO, BigDecimal::add))
+				.isEqualByComparingTo(s.total());
+		CategorySpend archived = s.byCategory().stream().filter(c -> c.name().equals("Gym")).findFirst().orElseThrow();
+		assertThat(archived.archived()).isTrue();
+		assertThat(archived.spent()).isEqualByComparingTo("900");
+		assertThat(s.couldHaveBought()).extracting(WishCard::category).contains("Gym");
+
+		// Changing to another archived category is still refused.
+		CategoryView club = expenses.createCategory(me, new CategoryRequest("Club", "x", true));
+		expenses.archiveCategory(me, club.id());
+		assertStatus(() -> expenses.update(me, e.id(),
+				new ExpenseRequest(new BigDecimal("900"), club.id(), today, null, null, null)), HttpStatus.BAD_REQUEST);
+	}
+
+	@Test
+	void spentOnMustBeWithinTwoYearsAndTomorrow() {
+		LocalDate today = today();
+		Long food = cat("Food delivery");
+		expenses.create(me, new ExpenseRequest(BigDecimal.TEN, food, today.plusDays(1), null, null, null));
+		expenses.create(me, new ExpenseRequest(BigDecimal.TEN, food, today.minusYears(2), null, null, null));
+		assertStatus(() -> expenses.create(me, new ExpenseRequest(BigDecimal.TEN, food, today.plusDays(2), null, null,
+				null)), HttpStatus.BAD_REQUEST);
+		assertStatus(() -> expenses.create(me, new ExpenseRequest(BigDecimal.TEN, food, today.minusYears(2).minusDays(1),
+				null, null, null)), HttpStatus.BAD_REQUEST);
+	}
+
+	@Test
+	void savingTheOverallBudgetTwiceUpdatesTheSameRow() {
+		String month = today().toString().substring(0, 7);
+		expenses.saveBudgets(me, new BudgetRequest(month, List.of(new BudgetItem(null, new BigDecimal("100")))));
+		expenses.saveBudgets(me, new BudgetRequest(month, List.of(new BudgetItem(null, new BigDecimal("200")),
+				new BudgetItem(null, new BigDecimal("300")))));
+		assertThat(expenses.budgets(me, month)).hasSize(1);
+		assertThat(expenses.budgets(me, month).get(0).limit()).isEqualByComparingTo("300");
+	}
+
+	@Test
+	void staleInvestPriceGivesNoShareCount() {
+		StockPrice p = savePrice("RELIANCE", "1500");
+		expenses.create(me, new ExpenseRequest(new BigDecimal("500"), cat("Shopping"), today(), null, null, null));
+		assertThat(expenses.summary(me, null).couldHaveBought().get(0).investShares()).isNotNull();
+
+		p.setTradeDate(calendar.lastCompletedTradingDay().minusDays(30));
+		priceRepo.save(p);
+		WishCard card = expenses.summary(me, null).couldHaveBought().get(0);
+		assertThat(card.investShares()).isNull();
+		assertThat(card.investSymbol()).isNull();
+	}
+
+	@Test
 	void badMonthIsRejected() {
 		assertStatus(() -> expenses.summary(me, "Oct-2026"), HttpStatus.BAD_REQUEST);
 	}
@@ -193,13 +257,13 @@ class ExpenseIntegrationTest {
 				e -> assertThat(e.getStatus()).isEqualTo(status));
 	}
 
-	private void savePrice(String symbol, String close) {
+	private StockPrice savePrice(String symbol, String close) {
 		StockPrice p = new StockPrice();
 		p.setStock(stockService.require(symbol));
 		p.setTradeDate(calendar.lastCompletedTradingDay());
 		p.setClose(new BigDecimal(close));
 		p.setPreviousClose(new BigDecimal(close));
 		p.setFetchedAt(Instant.now());
-		priceRepo.save(p);
+		return priceRepo.save(p);
 	}
 }

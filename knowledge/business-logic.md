@@ -22,7 +22,7 @@
 
 ## Permissions
 - Owner or assigned advisor can view, trade and read history (`requireManaged`).
-- Only role ADVISOR may create a portfolio with `ownerId` other than self; the advisor is then stored as `Portfolio.advisor`. `listManagedBy` returns portfolios where the user is owner or advisor.
+- Only role ADVISOR may create a portfolio with `ownerId` other than self, and only for a user who already has a portfolio advised by them (a client). The first link is made by the client: they create their own portfolio with `advisorId` set to the advisor (must have role ADVISOR). The advisor is stored as `Portfolio.advisor`. `listManagedBy` returns portfolios where the user is owner or advisor.
 - Auth is a placeholder: client sends `X-User-Id`; nothing verifies it. `/api/admin/**` is unprotected. See open-issues.md.
 - Client IDs are shown as `IM-0001` (`Dtos.clientId`); the frontend parses them back to the numeric user id.
 
@@ -51,3 +51,33 @@ One row per (user, stock). POST on an existing symbol updates the target price. 
 - Budgets: per (category, month) plus an overall cap (category null). PUT upserts listed items only; null or 0 removes.
 - Summary: month total, last month total, per-category spend (sorted by spend) with count and budget.
 - **Could-have-bought cards**: for each `want` category with spend from 1 Jan to the end of the selected month (year to date), pick the priciest active `WishProduct` whose price <= spend; `count` = floor(spend / price). If spend is below the cheapest product, show that product with `progressPercent` = floor(spend * 100 / price). `investShares` = floor(spend / last close of `expense.invest-symbol`, default RELIANCE), null when no stored price. Uses stored prices only, so no Alpha Vantage calls.
+
+## Bhavcopy daily import
+- `BhavcopyImporter.importDay(date, trigger)`: fetches NSE (primary) and BSE; BSE only contributes companies whose ISIN is not in NSE's file. Equity rows only (`isEquity()`). Rows whose trade date differs from the requested date, or whose close is <= 0, are skipped and counted in the notes; a file whose rows are all for another date counts as "not published" (note "file is for <date>"). Malformed CSV lines are skipped and counted by the parser (`ParsedRows.skipped()`); the parse fails only if more than half the data rows are bad.
+- Stock matching: by ISIN first; else by symbol (case-insensitive) if that stock has no ISIN yet (ISIN is then set); else a new Stock is created (symbol = ticker, name = FinInstrmNm, sector `Other`, avSymbol null). A BSE-only ticker already used by a different ISIN is skipped and counted in the notes.
+- Prices upserted per (stock, tradeDate) in batches of 500, one transaction per batch; re-running a day updates, never duplicates. Prices are read from `StockPrice` regardless of avSymbol.
+- Outcome: both exchanges "not published" = holiday: status SUCCESS, `published=false`, note "no bhavcopy (holiday?)". One exchange missing or failing = PARTIAL (the other is still imported). Both failing with a real error = FAILED. A `JobRun` (source BHAVCOPY) is written for every run. One import at a time (409 otherwise).
+- `BhavcopyJob`: cron `bhavcopy.cron` (19:30 IST Mon-Fri) plus retries `bhavcopy.retry-cron` (20:00 and 20:30); retries skip if a SUCCESS import with prices saved already ran today. Skips non-weekdays. `bhavcopy.enabled=false` removes the job bean.
+- Alpha Vantage: `getQuote` returns the stored price (or 503 "No price yet") for stocks with null avSymbol and never calls the API. The scheduled AV job only fetches tracked stocks whose price is not fresh, so once bhavcopy has stored the last trading day it makes 0 calls.
+- Search order: stocks with any stored price first, then by symbol.
+
+## Bhavcopy (preview)
+- `marketdata/bhavcopy`: `BhavcopyClient` downloads the exchange's daily end-of-day file (BSE plain CSV, NSE ZIP with one CSV) with browser-like headers; `BhavcopyParser` unzips if needed and reads columns by header name (required: TradDt, Src, FinInstrmTp, TckrSymb, ClsPric). Rows with a blank close are skipped; `equities()` keeps `FinInstrmTp == STK`.
+- `BhavcopyController` preview stores nothing; the import above does the saving.
+
+### Bhavcopy: what counts as a share
+`BhavcopyRow.isEquity()`: instrument type `STK`, ISIN starting `INE`, and on NSE a series of EQ, BE, BZ, SM or ST. On BSE the groups F (bonds/NCDs), IF (InvITs), G and GS (government securities) are excluded; verified on the real 2026-10-09 file (observed INE groups B,X,A,F,XT,M,T,MT,Z,IF,P,MS,ZP,TS,R). `BhavcopyClient` rejects downloads over 20 MB. A download that is neither a ZIP nor a CSV starting with `TradDt` is treated as "no file for that date" (BSE serves an HTML page with HTTP 200 on holidays).
+
+## Trade safeguards (2026-10-11 review)
+- Quantity 1..10,000,000 per order; position sums use `Math.addExact` (overflow -> 400).
+- Optional `clientRequestId` makes a trade idempotent per portfolio (checked after the owner row lock, so replays serialise). Replays return the original trade, current holding and cash.
+- BUY is blocked (409) when the latest stored price is more than 7 calendar days (about 5 trading days) older than the last completed trading day (delisted or dead feed). SELL is still allowed at the last price so users are not trapped. Weekend/holiday trades use the last close (accepted).
+- All `setScale(2)` use HALF_UP.
+- Concurrent owner + advisor trades cannot overdraw: both lock the owner's AppUser row.
+
+## Review fixes 2026-10-12 (expense and trading)
+- Trading rejects a latest price that is null or <= 0 with 409 (before idempotent replay, both sides).
+- Expense update keeps the expense's existing category even if archived; a changed category must be usable. `spentOn` must be in [today-2y, today+1d] IST (an unchanged date on update is not rechecked).
+- Month summary lists archived categories that have spend (`archived=true`), and could-have-bought cards count their year-to-date spend.
+- `saveBudgets` locks the user row (`findByIdForUpdate`) and finds the overall budget with an explicit null-category lookup, so concurrent saves cannot create duplicates (MySQL unique keys do not constrain NULL).
+- The could-have-bought share count is omitted (null investSymbol/investShares) when the invest-symbol price is older than `TradingService.MAX_PRICE_AGE_DAYS`.

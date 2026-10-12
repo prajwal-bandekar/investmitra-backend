@@ -107,7 +107,7 @@ public class StockService {
 
 	/** Merges holdings from several portfolios into one position with a weighted average price. */
 	static PositionView combinedPosition(List<Holding> held, StockPrice price) {
-		long qty = held.stream().mapToLong(Holding::getQuantity).sum();
+		long qty = held.stream().mapToLong(Holding::getQuantity).reduce(0L, Math::addExact);
 		if (qty == 0) {
 			return null;
 		}

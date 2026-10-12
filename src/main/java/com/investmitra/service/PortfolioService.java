@@ -59,11 +59,24 @@ public class PortfolioService {
 
 		if (request.ownerId() == null || request.ownerId().equals(actorId)) {
 			p.setOwner(actor);
+			if (request.advisorId() != null) {
+				// The owner is the one creating the portfolio, so naming an advisor is their consent.
+				AppUser advisor = users.require(request.advisorId());
+				if (advisor.getRole() != Role.ADVISOR || advisor.getId().equals(actorId)) {
+					throw ApiException.badRequest("User " + request.advisorId() + " is not an advisor");
+				}
+				p.setAdvisor(advisor);
+			}
 		} else {
 			if (actor.getRole() != Role.ADVISOR) {
 				throw ApiException.forbidden("Only advisors can create portfolios for other users");
 			}
-			p.setOwner(users.require(request.ownerId()));
+			AppUser owner = users.require(request.ownerId());
+			if (!portfolios.existsByOwnerIdAndAdvisorId(owner.getId(), actorId)) {
+				throw ApiException.forbidden("User " + request.ownerId() + " is not your client yet. Ask them to create "
+						+ "a portfolio and appoint you as advisor; after that you can create more for them");
+			}
+			p.setOwner(owner);
 			p.setAdvisor(actor);
 		}
 
@@ -95,7 +108,7 @@ public class PortfolioService {
 				invested = invested.add(cost);
 				value = value.add(price == null ? cost : PositionMath.amount(price.getClose(), h.getQuantity()));
 			}
-			BigDecimal pnl = value.subtract(invested).add(trades.totalRealizedPnl(p)).setScale(2);
+			BigDecimal pnl = value.subtract(invested).add(trades.totalRealizedPnl(p)).setScale(2, java.math.RoundingMode.HALF_UP);
 			return summary(p, value, pnl);
 		}).toList();
 	}
@@ -114,7 +127,7 @@ public class PortfolioService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 		BigDecimal pnl = value.subtract(invested);
 		return new PortfolioDetail(summary(p), views, invested, value, pnl, PositionMath.percent(pnl, invested),
-				trades.totalRealizedPnl(p).setScale(2), p.getOwner().getCashBalance());
+				trades.totalRealizedPnl(p).setScale(2, java.math.RoundingMode.HALF_UP), p.getOwner().getCashBalance());
 	}
 
 	@Transactional(readOnly = true)

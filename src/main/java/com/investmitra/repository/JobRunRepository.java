@@ -12,6 +12,9 @@ public interface JobRunRepository extends JpaRepository<JobRun, Long> {
 
 	List<JobRun> findTop20ByOrderByStartedAtDesc();
 
+	boolean existsBySourceAndStatusAndStartedAtGreaterThanEqualAndPricesSavedGreaterThan(String source, com.investmitra.entity.JobStatus status,
+			Instant since, int minPrices);
+
 	@Query("select coalesce(sum(j.callsMade), 0) from JobRun j where j.startedAt >= :since")
 	int callsMadeSince(@Param("since") Instant since);
 }

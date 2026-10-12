@@ -9,7 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** A listed company. Only stocks with an Alpha Vantage symbol get daily prices. */
+/** A listed company. Prices come from the daily bhavcopy import; only stocks with an Alpha Vantage symbol are also fetched from Alpha Vantage. */
 @Entity
 @Getter
 @Setter

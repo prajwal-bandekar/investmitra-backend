@@ -15,6 +15,7 @@ Base path: `src/main/java/com/investmitra/`. Constructor injection everywhere.
 - **MarketCalendar**: IST dates, `lastCompletedTradingDay()`, `isFresh(tradeDate, fetchedAt)`, `today()`, `startOfToday()`. No holiday calendar.
 - **PriceFetchJob**: `@Scheduled(cron=${pricejob.cron}, zone Asia/Kolkata)` calls `refreshTrackedStocks(SCHEDULED)`; swallows `ApiException` (already running).
 - **StockPriceWriter**: `@Transactional upsert(stock, quote)` keyed by (stock, tradeDate).
+- **BhavcopyImporter** (`marketdata/bhavcopy`): the import described in business-logic.md; `importDay`, `importedSince`. **BhavcopyJob**: scheduled run + retry. **BhavcopyImportController** (`web`): `POST /api/admin/bhavcopy/run`.
 - **Pacer**: functional interface `pause(Duration)`; real impl sleeps, tests use no-op.
 
 ## service
@@ -41,3 +42,5 @@ Base path: `src/main/java/com/investmitra/`. Constructor injection everywhere.
 - **UserController** `/api/users`, **StockController** `/api` (stocks, sectors), **PortfolioController** `/api/portfolios`, **WatchlistController** `/api/watchlist`, **PriceJobController** `/api/admin/price-job`, **HomeController** `/` (302 to frontend). Details in api.md.
 - **ApiExceptionHandler** (`@RestControllerAdvice`): ApiException -> its status; validation -> 400 "field message"; missing header -> 401 "Missing header X"; unreadable body -> 400.
 - **dto/Dtos**: all request/response records plus `clientId(id)` -> `IM-%04d`. **dto/PriceView**: price + change/changePercent computed from previousClose, `source`, `fresh`. **dto/ResponseStructure**: `{data, message, statusCode}`.
+
+- 2026-10-12: `BhavcopyController` preview is now `/api/admin/bhavcopy/preview/...`. `BhavcopyParser.ParsedRows` (List with `skipped()`); `BhavcopyClient.readCapped`. `ExpenseService` now also takes `MarketCalendar` and `AppUserRepository`; `BudgetRepository.findFirstByUserAndMonthAndCategoryIsNull`.

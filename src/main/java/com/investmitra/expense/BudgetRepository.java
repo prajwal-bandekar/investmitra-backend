@@ -9,4 +9,7 @@ import com.investmitra.entity.AppUser;
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
 
 	List<Budget> findByUserAndMonth(AppUser user, String month);
+
+	/** The overall (no category) budget for the month, if any. */
+	java.util.Optional<Budget> findFirstByUserAndMonthAndCategoryIsNull(AppUser user, String month);
 }

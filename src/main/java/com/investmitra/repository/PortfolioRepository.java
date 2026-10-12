@@ -9,6 +9,8 @@ import com.investmitra.entity.Portfolio;
 
 public interface PortfolioRepository extends JpaRepository<Portfolio, Long> {
 
+	boolean existsByOwnerIdAndAdvisorId(Long ownerId, Long advisorId);
+
 	@Query("select p from Portfolio p where p.owner.id = :userId or p.advisor.id = :userId order by p.id")
 	List<Portfolio> findManagedBy(@Param("userId") Long userId);
 }

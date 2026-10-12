@@ -14,6 +14,7 @@ import com.investmitra.entity.Stock;
 import com.investmitra.entity.StockPrice;
 import com.investmitra.entity.Trade;
 import com.investmitra.entity.TradeSide;
+import com.investmitra.marketdata.MarketCalendar;
 import com.investmitra.repository.AppUserRepository;
 import com.investmitra.repository.HoldingRepository;
 import com.investmitra.repository.StockPriceRepository;
@@ -35,9 +36,14 @@ public class TradingService {
 	private final TradeRepository trades;
 	private final StockPriceRepository prices;
 	private final Clock clock;
+	private final MarketCalendar calendar;
+
+	/** A price older than this many calendar days (about 5 trading days) is too stale to buy at. */
+	public static final int MAX_PRICE_AGE_DAYS = 7;
 
 	public TradingService(PortfolioService portfolios, StockService stockService, AppUserRepository users,
-			HoldingRepository holdings, TradeRepository trades, StockPriceRepository prices, Clock clock) {
+			HoldingRepository holdings, TradeRepository trades, StockPriceRepository prices, Clock clock,
+			MarketCalendar calendar) {
 		this.portfolios = portfolios;
 		this.stockService = stockService;
 		this.users = users;
@@ -45,6 +51,7 @@ public class TradingService {
 		this.trades = trades;
 		this.prices = prices;
 		this.clock = clock;
+		this.calendar = calendar;
 	}
 
 	@Transactional
@@ -53,8 +60,27 @@ public class TradingService {
 		Stock stock = stockService.require(request.symbol());
 		StockPrice price = prices.findTopByStockOrderByTradeDateDesc(stock)
 				.orElseThrow(() -> ApiException.conflict("No price available yet for " + stock.getSymbol()));
+		if (price.getClose() == null || price.getClose().signum() <= 0) {
+			throw ApiException.conflict("No usable price for " + stock.getSymbol() + " (latest close is "
+					+ price.getClose() + ")");
+		}
 		AppUser owner = users.findByIdForUpdate(portfolio.getOwner().getId()).orElseThrow();
 		AppUser actor = actorId.equals(owner.getId()) ? owner : users.getReferenceById(actorId);
+
+		String requestId = request.clientRequestId() == null || request.clientRequestId().isBlank() ? null
+				: request.clientRequestId().trim();
+		if (requestId != null) {
+			// The owner row is locked, so two submissions of the same request run one after the other.
+			Trade earlier = trades.findByPortfolioAndClientRequestId(portfolio, requestId).orElse(null);
+			if (earlier != null) {
+				return replay(earlier, stock, request, price, owner, portfolio);
+			}
+		}
+		if (request.side() == TradeSide.BUY
+				&& price.getTradeDate().isBefore(calendar.lastCompletedTradingDay().minusDays(MAX_PRICE_AGE_DAYS))) {
+			throw ApiException.conflict("Latest price for " + stock.getSymbol() + " is from " + price.getTradeDate()
+					+ " and too old to trade on; the stock may be delisted or its data feed has stopped");
+		}
 
 		Holding holding = request.side() == TradeSide.BUY
 				? buy(portfolio, owner, stock, request.quantity(), price.getClose())
@@ -68,6 +94,7 @@ public class TradingService {
 		trade.setPrice(price.getClose());
 		trade.setAmount(PositionMath.amount(price.getClose(), request.quantity()));
 		trade.setExecutedAt(Instant.now(clock));
+		trade.setClientRequestId(requestId);
 
 		if (request.side() == TradeSide.SELL) {
 			holding = sell(portfolio, owner, stock, request.quantity(), price.getClose(), trade);
@@ -75,6 +102,18 @@ public class TradingService {
 		trades.save(trade);
 
 		return new TradeResult(PortfolioService.tradeView(trade, price.getTradeDate()),
+				holding == null ? null : PortfolioService.holdingView(holding, price), owner.getCashBalance());
+	}
+
+	/** A repeated submission returns the original result instead of trading again. */
+	private TradeResult replay(Trade earlier, Stock stock, TradeRequest request, StockPrice price, AppUser owner,
+			Portfolio portfolio) {
+		if (!earlier.getStock().getId().equals(stock.getId()) || earlier.getSide() != request.side()
+				|| earlier.getQuantity() != request.quantity()) {
+			throw ApiException.conflict("clientRequestId was already used for a different order");
+		}
+		Holding holding = holdings.findByPortfolioAndStock(portfolio, stock).orElse(null);
+		return new TradeResult(PortfolioService.tradeView(earlier, price.getTradeDate()),
 				holding == null ? null : PortfolioService.holdingView(holding, price), owner.getCashBalance());
 	}
 
@@ -96,8 +135,14 @@ public class TradingService {
 			h.setAvgBuyPrice(BigDecimal.ZERO);
 			return h;
 		});
+		long newQty;
+		try {
+			newQty = Math.addExact(holding.getQuantity(), qty);
+		} catch (ArithmeticException e) {
+			throw ApiException.badRequest("Position in " + stock.getSymbol() + " would exceed the maximum size");
+		}
 		holding.setAvgBuyPrice(PositionMath.averageAfterBuy(holding.getQuantity(), holding.getAvgBuyPrice(), qty, price));
-		holding.setQuantity(holding.getQuantity() + qty);
+		holding.setQuantity(newQty);
 		return holdings.save(holding);
 	}
 

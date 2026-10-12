@@ -15,7 +15,7 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 	@Query("""
 			select e from Expense e join fetch e.category
 			where e.user = :user and e.spentOn between :from and :to
-			  and (:categoryId is null or e.category.id = :categoryId)
+			  and (cast(:categoryId as long) is null or e.category.id = :categoryId)
 			  and (:mode is null or e.paymentMode = :mode)
 			order by e.spentOn desc, e.id desc
 			""")

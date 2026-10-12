@@ -96,3 +96,29 @@ Format: date, decision, why, alternatives rejected, status. Dates are when the d
 - **Why:** One month of food delivery rarely reaches an iPhone; the year total makes the comparison land.
 - **Rejected:** Month-only spend; hardcoded prices in the frontend.
 - **Status:** Done. Phase 2: SMS auto-capture (Android) per the PRD.
+
+## D17 Trial of exchange bhavcopy for prices (2026-10-11)
+- **Decision:** Trial NSE/BSE daily bhavcopy (one free file per exchange per day, every listed stock) instead of per-stock Alpha Vantage calls, to save the 25/day quota. BSE: `https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_{yyyyMMdd}_F_0000.CSV`; NSE: `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyyMMdd}_F_0000.csv.zip`. Columns are looked up by header name so a reordered file still parses. Preview endpoint only.
+- **Rejected:** Calling Alpha Vantage per stock for the whole exchange (thousands of calls vs a 25/day budget).
+- **Status:** Trial. Not saved to DB, not scheduled.
+
+## D18 Daily bhavcopy import (2026-10-11)
+- **Decision:** Import NSE + BSE bhavcopy daily at 19:30 IST Mon-Fri, retries at 20:00 and 20:30 (second/third cron, skipped if already imported today; no sleeping threads). NSE is primary; BSE only adds companies whose ISIN NSE lacks. Match stocks by ISIN, then by symbol (backfilling ISIN), else create with sector `Other`, avSymbol null. Both exchanges unpublished = holiday (SUCCESS, not retried as failure). Alpha Vantage stays; its job naturally makes 0 calls once bhavcopy has stored the last trading day.
+- **Rejected:** New `FetchTrigger.BHAVCOPY` enum value: on MySQL Hibernate maps STRING enums to a native `enum(...)` column that `ddl-auto=update` does not alter, so inserts could fail on the existing DB. Used a new nullable `JobRun.source` string column plus existing SCHEDULED/MANUAL triggers instead. Also rejected: Alpha Vantage fallback for untracked stocks on demand (guard added, since only 25 calls/day).
+- **Rejected:** Sleeping retry threads; one huge transaction for the whole file (batches of 500 instead). IDENTITY ids mean Hibernate cannot batch inserts; accepted.
+- **Search order:** priced stocks first, then symbol (was: avSymbol-null last).
+
+## D19 Review fixes: advisor link, idempotency, stale prices (2026-10-11)
+- **Decision:** An advisor may create portfolios for another user only if that user already has a portfolio advised by them. The first link is created by the client via `advisorId` on their own portfolio (consent). Idempotency uses optional `clientRequestId` with a unique (portfolio_id, client_request_id); a replay returns the first result, a mismatched replay is 409. BUY blocked when the price is >7 days older than the last completed trading day; SELL stays allowed.
+- **Rejected:** Invite/accept flow (more tables and UI than needed now); blocking self-chosen ADVISOR at signup (would break the demo advisor account); blocking SELL on stale prices (traps users in delisted stocks); required idempotency key (breaks existing clients).
+- **Status:** Done. Frontend must switch the advisor flow: client appoints the advisor first.
+
+## D20 Review fixes round 2 (2026-10-12)
+- **Decision:** BSE bonds/InvITs excluded by group (F, IF, G, GS) with an exclusion set, since the other observed groups (A, B, X, XT, M, T, MT, Z, P, MS, ZP, TS, R) are shares. Parser tolerates bad rows (skip and count) and fails only above 50% bad. Rows for a date other than the requested one are never imported. Budgets are serialised with the existing user-row lock; the overall budget is found by explicit lookup. Archived categories appear in summaries only when they have spend. A stale invest price (same 7-day limit as BUY) hides the share count. Preview endpoint moved under `/api/admin`.
+- **Rejected:** Allow-list of BSE groups (would silently drop newly introduced share groups); a DB unique index for the NULL-category budget (MySQL unique keys ignore NULLs without a generated column); failing the whole import on any bad row.
+- **Status:** Done. Cleanup of already-imported bonds is a manual SQL script (`knowledge/scripts/cleanup-bse-bonds.sql`) that the user must review before running.
+
+## D21 Free deployment: Render + Neon, access-key gate instead of JWT (2026-10-12)
+- Chosen: Docker web service on Render free, Neon Postgres, `prod` profile, shared-secret filter (`X-Access-Key`, plus `X-Admin-Key` for `/api/admin/**`), cron-job.org ping on `/api/health`.
+- Rejected for now: JWT login (owner chose the simple gate; keys are one shared secret, not per-user); Testcontainers for Postgres (needs Docker; H2 PostgreSQL mode used instead, which does not catch every dialect difference); a Spring Security filter chain (extra dependency for a one-secret check).
+- The filter runs before Spring CORS, so it adds `Access-Control-Allow-Origin` itself on rejections for allowed origins.

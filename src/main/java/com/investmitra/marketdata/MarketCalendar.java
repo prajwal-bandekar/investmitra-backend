@@ -32,6 +32,11 @@ public class MarketCalendar {
 		return LocalDate.now(clock.withZone(IST));
 	}
 
+	/** Weekdays only; exchange holidays are not modelled. */
+	public boolean isTradingDay(LocalDate day) {
+		return !isWeekend(day);
+	}
+
 	public Instant startOfToday() {
 		return today().atStartOfDay(IST).toInstant();
 	}

@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.investmitra.entity.AppUser;
+import com.investmitra.repository.AppUserRepository;
+import com.investmitra.service.TradingService;
 import com.investmitra.entity.StockPrice;
 import com.investmitra.expense.ExpenseDtos.BudgetItem;
 import com.investmitra.expense.ExpenseDtos.BudgetRequest;
@@ -48,11 +50,14 @@ public class ExpenseService {
 	private final StockService stockService;
 	private final UserService users;
 	private final Clock clock;
+	private final MarketCalendar calendar;
+	private final AppUserRepository userRepo;
 	private final String investSymbol;
 
 	public ExpenseService(ExpenseRepository expenses, ExpenseCategoryRepository categories, BudgetRepository budgets,
 			WishProductRepository products, StockRepository stocks, StockService stockService, UserService users,
-			Clock clock, @Value("${expense.invest-symbol:RELIANCE}") String investSymbol) {
+			Clock clock, MarketCalendar calendar, AppUserRepository userRepo,
+			@Value("${expense.invest-symbol:RELIANCE}") String investSymbol) {
 		this.expenses = expenses;
 		this.categories = categories;
 		this.budgets = budgets;
@@ -61,6 +66,8 @@ public class ExpenseService {
 		this.stockService = stockService;
 		this.users = users;
 		this.clock = clock;
+		this.calendar = calendar;
+		this.userRepo = userRepo;
 		this.investSymbol = investSymbol;
 	}
 
@@ -147,8 +154,16 @@ public class ExpenseService {
 
 	private void apply(Expense e, AppUser user, ExpenseRequest request) {
 		e.setAmount(request.amount().setScale(2, RoundingMode.HALF_UP));
-		e.setCategory(requireUsableCategory(user, request.categoryId()));
-		e.setSpentOn(request.spentOn() == null ? today() : request.spentOn());
+		// An existing expense may keep its (since archived) category; only a change needs a usable one.
+		if (e.getCategory() == null || !e.getCategory().getId().equals(request.categoryId())) {
+			e.setCategory(requireUsableCategory(user, request.categoryId()));
+		}
+		LocalDate spentOn = request.spentOn() == null ? today() : request.spentOn();
+		boolean unchangedDate = spentOn.equals(e.getSpentOn());
+		if (!unchangedDate && (spentOn.isBefore(today().minusYears(2)) || spentOn.isAfter(today().plusDays(1)))) {
+			throw ApiException.badRequest("spentOn must be within the last 2 years and no later than tomorrow");
+		}
+		e.setSpentOn(spentOn);
 		e.setPaymentMode(request.paymentMode() == null ? PaymentMode.UPI : request.paymentMode());
 		e.setNote(request.note() == null || request.note().isBlank() ? null : request.note().trim());
 	}
@@ -167,14 +182,20 @@ public class ExpenseService {
 	/** Upserts the listed budgets; a null or zero limit removes one. Budgets not listed are left alone. */
 	@Transactional
 	public List<BudgetView> saveBudgets(Long userId, BudgetRequest request) {
-		AppUser user = users.require(userId);
+		users.require(userId);
+		// Serialise concurrent saves per user so two requests can't both insert the same budget row.
+		AppUser user = userRepo.findByIdForUpdate(userId).orElseThrow();
 		String month = parseMonth(request.month()).toString();
 		Map<Long, Budget> existing = new HashMap<>();
 		for (Budget b : budgets.findByUserAndMonth(user, month)) {
-			existing.put(b.getCategory() == null ? null : b.getCategory().getId(), b);
+			if (b.getCategory() != null) {
+				existing.put(b.getCategory().getId(), b);
+			}
 		}
 		for (BudgetItem item : request.items()) {
-			Budget b = existing.get(item.categoryId());
+			Budget b = item.categoryId() == null
+					? budgets.findFirstByUserAndMonthAndCategoryIsNull(user, month).orElse(null)
+					: existing.get(item.categoryId());
 			boolean remove = item.limit() == null || item.limit().signum() == 0;
 			if (remove) {
 				if (b != null) {
@@ -211,13 +232,15 @@ public class ExpenseService {
 			limits.put(b.getCategory() == null ? null : b.getCategory().getId(), b.getLimitAmount());
 		}
 
+		// Archived categories that still have spend this month must show, so the rows add up to the total.
+		List<ExpenseCategory> shown = withSpend(visible, monthTotals);
 		List<CategorySpend> byCategory = new ArrayList<>();
-		for (ExpenseCategory c : visible) {
+		for (ExpenseCategory c : shown) {
 			Object[] row = monthTotals.get(c.getId());
 			BigDecimal spent = row == null ? BigDecimal.ZERO.setScale(2) : (BigDecimal) row[1];
 			long count = row == null ? 0 : ((Number) row[2]).longValue();
 			byCategory.add(new CategorySpend(c.getId(), c.getName(), c.getIcon(), c.isWant(), spent, count,
-					limits.get(c.getId())));
+					limits.get(c.getId()), c.isArchived()));
 		}
 		byCategory.sort(Comparator.comparing(CategorySpend::spent).reversed());
 
@@ -226,6 +249,19 @@ public class ExpenseService {
 
 		return new MonthSummary(ym.toString(), total, lastMonth, limits.get(null), byCategory,
 				wishCards(user, ym, visible));
+	}
+
+	/** The visible categories plus any other category (archived) that has spend in the given totals. */
+	private List<ExpenseCategory> withSpend(List<ExpenseCategory> visible, Map<Long, Object[]> totals) {
+		java.util.Set<Long> known = new java.util.HashSet<>();
+		visible.forEach(c -> known.add(c.getId()));
+		List<Long> missing = totals.keySet().stream().filter(id -> !known.contains(id)).toList();
+		if (missing.isEmpty()) {
+			return visible;
+		}
+		List<ExpenseCategory> all = new ArrayList<>(visible);
+		all.addAll(categories.findAllById(missing));
+		return all;
 	}
 
 	private List<WishCard> wishCards(AppUser user, YearMonth ym, List<ExpenseCategory> visible) {
@@ -237,7 +273,7 @@ public class ExpenseService {
 		BigDecimal investPrice = investPrice();
 
 		List<WishCard> cards = new ArrayList<>();
-		for (ExpenseCategory c : visible) {
+		for (ExpenseCategory c : withSpend(visible, ytd)) {
 			Object[] row = ytd.get(c.getId());
 			if (!c.isWant() || row == null) {
 				continue;
@@ -279,6 +315,9 @@ public class ExpenseService {
 	private BigDecimal investPrice() {
 		return stocks.findBySymbolIgnoreCase(investSymbol)
 				.map(s -> stockService.latestPrices(List.of(s.getId())).get(s.getId()))
+				// Same staleness limit as the BUY block: an old price must not size a "could have bought" share count.
+				.filter(p -> !p.getTradeDate()
+						.isBefore(calendar.lastCompletedTradingDay().minusDays(TradingService.MAX_PRICE_AGE_DAYS)))
 				.map(StockPrice::getClose)
 				.filter(p -> p.signum() > 0)
 				.orElse(null);

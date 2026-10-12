@@ -61,6 +61,10 @@ class InvestMitraIntegrationTest {
 	@MockitoBean
 	AlphaVantageClient alphaVantage;
 
+	/** Declared (unused) so this class shares one Spring context with BhavcopyImporterTest. */
+	@MockitoBean
+	com.investmitra.marketdata.bhavcopy.BhavcopyClient bhavcopyClient;
+
 	@Autowired MarketDataService marketData;
 	@Autowired MarketCalendar calendar;
 	@Autowired UserService users;
@@ -146,17 +150,17 @@ class InvestMitraIntegrationTest {
 	@Test
 	void reRunningForSameTradingDayUpdatesInsteadOfDuplicating() {
 		when(alphaVantage.getGlobalQuote(anyString())).thenAnswer(inv -> quote(inv.getArgument(0), "100"));
-		marketData.getQuote("WIPRO");
+		marketData.getQuote("INFY");
 		priceRepo.findAll().forEach(p -> {
 			p.setFetchedAt(Instant.parse("2020-01-01T00:00:00Z"));
 			p.setTradeDate(calendar.lastCompletedTradingDay().minusDays(7));
 			priceRepo.save(p);
 		});
-		marketData.getQuote("WIPRO");
-		marketData.getQuote("WIPRO");
+		marketData.getQuote("INFY");
+		marketData.getQuote("INFY");
 
 		assertThat(priceRepo.count()).isEqualTo(2); // old week + latest day, no duplicates
-		verify(alphaVantage, times(2)).getGlobalQuote("WIPRO.BSE");
+		verify(alphaVantage, times(2)).getGlobalQuote("INFY.BSE");
 	}
 
 	// ---------- on-demand quote (date-wise cache) ----------
@@ -174,15 +178,15 @@ class InvestMitraIntegrationTest {
 
 	@Test
 	void staleQuoteIsFetchedOnceThenServedFromDatabase() {
-		when(alphaVantage.getGlobalQuote("WIPRO.BSE")).thenReturn(quote("WIPRO.BSE", "250.50"));
+		when(alphaVantage.getGlobalQuote("INFY.BSE")).thenReturn(quote("INFY.BSE", "250.50"));
 
-		PriceView first = marketData.getQuote("WIPRO");
-		PriceView second = marketData.getQuote("wipro");
+		PriceView first = marketData.getQuote("INFY");
+		PriceView second = marketData.getQuote("infy");
 
 		assertThat(first.source()).isEqualTo(MarketDataService.SOURCE_ALPHA_VANTAGE);
 		assertThat(second.source()).isEqualTo(MarketDataService.SOURCE_DATABASE);
 		assertThat(second.close()).isEqualByComparingTo("250.50");
-		verify(alphaVantage, times(1)).getGlobalQuote("WIPRO.BSE");
+		verify(alphaVantage, times(1)).getGlobalQuote("INFY.BSE");
 	}
 
 	@Test
@@ -210,12 +214,12 @@ class InvestMitraIntegrationTest {
 	@Test
 	void averageBuyPriceCashAndRealizedPnlFollowBrokerRules() {
 		Long user = newUser("fresher@example.com", Role.USER);
-		Long pid = portfolios.create(user, new CreatePortfolioRequest("IT bets", "Information Technology", null)).id();
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("IT bets", "Information Technology", null, null)).id();
 
 		savePrice("TCS", "3000");
-		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10));
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10, null));
 		savePrice("TCS", "3400");
-		TradeResult secondBuy = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 30));
+		TradeResult secondBuy = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 30, null));
 
 		assertThat(secondBuy.holding().quantity()).isEqualTo(40);
 		assertThat(secondBuy.holding().avgBuyPrice()).isEqualByComparingTo("3300");
@@ -226,7 +230,7 @@ class InvestMitraIntegrationTest {
 		assertThat(found.myPosition().avgBuyPrice()).isEqualByComparingTo("3300");
 		assertThat(found.myPosition().unrealizedPnl()).isEqualByComparingTo("4000.00"); // (3400-3300)*40
 
-		TradeResult sell = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 15));
+		TradeResult sell = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 15, null));
 		assertThat(sell.trade().realizedPnl()).isEqualByComparingTo("1500.00"); // (3400-3300)*15
 		assertThat(sell.holding().avgBuyPrice()).isEqualByComparingTo("3300"); // unchanged by selling
 		assertThat(sell.ownerCash()).isEqualByComparingTo("919000.00");
@@ -236,7 +240,7 @@ class InvestMitraIntegrationTest {
 		assertThat(detail.currentValue()).isEqualByComparingTo("85000.00");
 		assertThat(detail.realizedPnl()).isEqualByComparingTo("1500.00");
 
-		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 25));
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 25, null));
 		assertThat(holdingRepo.count()).isZero();
 		assertThat(portfolios.tradeHistory(user, pid)).hasSize(4);
 	}
@@ -244,10 +248,10 @@ class InvestMitraIntegrationTest {
 	@Test
 	void sectorPortfolioRejectsStocksFromOtherSectors() {
 		Long user = newUser("energy@example.com", Role.USER);
-		Long pid = portfolios.create(user, new CreatePortfolioRequest("Energy", "Oil Gas & Consumable Fuels", null)).id();
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Energy", "Oil Gas & Consumable Fuels", null, null)).id();
 		savePrice("TCS", "3000");
 
-		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1)))
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1, null)))
 				.isInstanceOf(ApiException.class)
 				.hasMessageContaining("only holds Oil Gas & Consumable Fuels");
 	}
@@ -255,13 +259,13 @@ class InvestMitraIntegrationTest {
 	@Test
 	void cannotOverspendOrOversell() {
 		Long user = newUser("careful@example.com", Role.USER);
-		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null)).id();
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
 		savePrice("TCS", "3000");
 
-		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1000)))
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1000, null)))
 				.hasMessageContaining("Insufficient cash");
-		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 2));
-		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 3)))
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 2, null));
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 3, null)))
 				.hasMessageContaining("holding only 2");
 	}
 
@@ -272,14 +276,19 @@ class InvestMitraIntegrationTest {
 		Long stranger = newUser("stranger@example.com", Role.USER);
 		savePrice("INFY", "1500");
 
-		Long pid = portfolios.create(advisor, new CreatePortfolioRequest("Client IT", null, client)).id();
-		TradeResult result = trading.trade(advisor, pid, new TradeRequest("INFY", TradeSide.BUY, 10));
+		// Not a client yet: the advisor cannot open portfolios in this user's name.
+		assertThatThrownBy(() -> portfolios.create(advisor, new CreatePortfolioRequest("Client IT", null, client, null)))
+				.isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+		// The client appoints the advisor on their own portfolio; after that the advisor may create more.
+		portfolios.create(client, new CreatePortfolioRequest("First", null, null, advisor));
+		Long pid = portfolios.create(advisor, new CreatePortfolioRequest("Client IT", null, client, null)).id();
+		TradeResult result = trading.trade(advisor, pid, new TradeRequest("INFY", TradeSide.BUY, 10, null));
 
 		assertThat(result.ownerCash()).isEqualByComparingTo("985000.00"); // client's cash is used
 		assertThat(stockService.get("INFY", advisor).myPosition().quantity()).isEqualTo(10);
 		assertThatThrownBy(() -> portfolios.detail(stranger, pid))
 				.isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
-		assertThatThrownBy(() -> portfolios.create(stranger, new CreatePortfolioRequest("x", null, client)))
+		assertThatThrownBy(() -> portfolios.create(stranger, new CreatePortfolioRequest("x", null, client, null)))
 				.hasMessageContaining("Only advisors");
 	}
 
@@ -312,15 +321,149 @@ class InvestMitraIntegrationTest {
 	@Test
 	void portfolioListIsValuedAtLatestClose() {
 		Long user = newUser("valued@example.com", Role.USER);
-		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null)).id();
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
 		savePrice("TCS", "3000");
-		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10));
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10, null));
 		savePrice("TCS", "3100");
 
 		var summary = portfolios.listManagedBy(user).getFirst();
 		assertThat(summary.currentValue()).isEqualByComparingTo("31000.00");
 		assertThat(summary.totalPnl()).isEqualByComparingTo("1000.00");
 		assertThat(stockService.tracked()).extracting(s -> s.symbol()).contains("TCS", "INFY");
+	}
+
+	// ---------- review fixes ----------
+
+	@Test
+	void onlyAdvisorsCanBeAppointedAndOnlyByTheOwner() {
+		Long owner = newUser("o1@example.com", Role.USER);
+		Long plain = newUser("o2@example.com", Role.USER);
+
+		assertThatThrownBy(() -> portfolios.create(owner, new CreatePortfolioRequest("x", null, null, plain)))
+				.hasMessageContaining("not an advisor");
+	}
+
+	@Test
+	void sectorMustBeKnown() {
+		Long user = newUser("sec@example.com", Role.USER);
+		assertThatThrownBy(() -> portfolios.create(user, new CreatePortfolioRequest("x", "Made Up", null, null)))
+				.hasMessageContaining("Unknown sector");
+		assertThat(portfolios.create(user, new CreatePortfolioRequest("ok", "  ", null, null)).sector()).isNull();
+	}
+
+	@Test
+	void duplicateEmailIsAConflict() {
+		newUser("dup@example.com", Role.USER);
+		assertThatThrownBy(() -> users.create(new CreateUserRequest("T", "DUP@example.com", "secret123", Role.USER)))
+				.isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+	}
+
+	@Test
+	void repeatedClientRequestIdDoesNotTradeTwice() {
+		Long user = newUser("idem@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "3000");
+
+		TradeResult first = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10, "req-1"));
+		TradeResult again = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10, "req-1"));
+
+		assertThat(again.trade().id()).isEqualTo(first.trade().id());
+		assertThat(again.ownerCash()).isEqualByComparingTo("970000.00");
+		assertThat(tradeRepo.count()).isEqualTo(1);
+		assertThat(holdingRepo.findAll().getFirst().getQuantity()).isEqualTo(10);
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 11, "req-1")))
+				.hasMessageContaining("different order");
+		// Same key on another portfolio is a separate order.
+		Long other = portfolios.create(user, new CreatePortfolioRequest("Other", null, null, null)).id();
+		trading.trade(user, other, new TradeRequest("TCS", TradeSide.BUY, 1, "req-1"));
+		assertThat(tradeRepo.count()).isEqualTo(2);
+	}
+
+	@Test
+	void tradesWithoutRequestIdAreNeverDeduplicated() {
+		Long user = newUser("noid@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "3000");
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1, null));
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1, null));
+		assertThat(tradeRepo.count()).isEqualTo(2);
+	}
+
+	@Test
+	void buyingOnAVeryStalePriceIsBlockedButSellingStillWorks() {
+		Long user = newUser("stale@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		StockPrice p = savePrice("TCS", "3000");
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 5, null));
+		p.setTradeDate(calendar.lastCompletedTradingDay().minusDays(30));
+		priceRepo.save(p);
+
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 1, null)))
+				.isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT))
+				.hasMessageContaining("too old");
+		assertThat(trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 5, null)).holding()).isNull();
+	}
+
+	@Test
+	void zeroPriceMeansNoTradeEvenForSells() {
+		Long user = newUser("zeroprice@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "0");
+		for (TradeSide side : TradeSide.values()) {
+			assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", side, 1, null)))
+					.isInstanceOfSatisfying(ApiException.class,
+							e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT))
+					.hasMessageContaining("No usable price");
+		}
+	}
+
+	@Test
+	void noPriceMeansNoTrade() {
+		Long user = newUser("noprice@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 1, null)))
+				.hasMessageContaining("No price available");
+	}
+
+	@Test
+	void sellAllThenBuyAgainStartsAFreshAverage() {
+		Long user = newUser("again@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "3000");
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 10, null));
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.SELL, 10, null));
+		savePrice("TCS", "3500");
+
+		TradeResult r = trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 2, null));
+		assertThat(r.holding().avgBuyPrice()).isEqualByComparingTo("3500");
+	}
+
+	@Test
+	void oddPricesRoundHalfUpInsteadOfThrowing() {
+		Long user = newUser("round@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "100.1234");
+		trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 3, null));
+		savePrice("TCS", "100.1299");
+
+		assertThat(portfolios.listManagedBy(user).getFirst().totalPnl()).isEqualByComparingTo("0.02");
+		assertThat(portfolios.detail(user, pid).realizedPnl()).isEqualByComparingTo("0.00");
+	}
+
+	@Test
+	void positionSizeOverflowIsRejected() {
+		Long user = newUser("big@example.com", Role.USER);
+		Long pid = portfolios.create(user, new CreatePortfolioRequest("Main", null, null, null)).id();
+		savePrice("TCS", "0.0001");
+		var h = new com.investmitra.entity.Holding();
+		h.setPortfolio(portfolioRepo.findById(pid).orElseThrow());
+		h.setStock(stockService.require("TCS"));
+		h.setQuantity(Long.MAX_VALUE - 1);
+		h.setAvgBuyPrice(BigDecimal.ONE);
+		holdingRepo.save(h);
+
+		assertThatThrownBy(() -> trading.trade(user, pid, new TradeRequest("TCS", TradeSide.BUY, 5, null)))
+				.hasMessageContaining("maximum size");
 	}
 
 	// ---------- helpers ----------

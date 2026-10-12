@@ -1,0 +1,11 @@
+.git
+.gradle
+build
+gradle.properties
+.idea
+.vscode
+*.iml
+knowledge
+HELP.md
+Dockerfile
+.dockerignore

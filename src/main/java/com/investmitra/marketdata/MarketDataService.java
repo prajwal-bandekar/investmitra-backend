@@ -80,6 +80,13 @@ public class MarketDataService {
 			return PriceView.of(stored.get(), SOURCE_DATABASE, true);
 		}
 
+		if (stock.getAvSymbol() == null) {
+			// Not an Alpha Vantage stock: only the bhavcopy import supplies its prices.
+			return stored.map(p -> PriceView.of(p, SOURCE_DATABASE, isFresh(p)))
+					.orElseThrow(() -> ApiException.unavailable("No price yet for " + stock.getSymbol()
+							+ "; prices arrive with the daily bhavcopy import"));
+		}
+
 		apiLock.lock();
 		try {
 			// Another request may have fetched it while we waited for the lock.
@@ -207,6 +214,7 @@ public class MarketDataService {
 	private JobRun startRun(FetchTrigger trigger) {
 		JobRun run = new JobRun();
 		run.setTrigger(trigger);
+		run.setSource(JobRun.SOURCE_ALPHA_VANTAGE);
 		run.setStatus(JobStatus.RUNNING);
 		run.setStartedAt(Instant.now(clock));
 		return jobRuns.save(run);

@@ -15,6 +15,8 @@ public interface StockPriceRepository extends JpaRepository<StockPrice, Long> {
 
 	Optional<StockPrice> findByStockAndTradeDate(Stock stock, LocalDate tradeDate);
 
+	List<StockPrice> findByTradeDateAndStockIdIn(LocalDate tradeDate, Collection<Long> stockIds);
+
 	Optional<StockPrice> findTopByStockOrderByTradeDateDesc(Stock stock);
 
 	/** Latest snapshot for each of the given stocks. */

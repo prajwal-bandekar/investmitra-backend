@@ -28,6 +28,7 @@ dependencies {
 	annotationProcessor("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("com.mysql:mysql-connector-j")
+	runtimeOnly("org.postgresql:postgresql")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
@@ -39,4 +40,16 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+// Runs the whole suite against H2 in PostgreSQL mode as a cheap Postgres-compatibility check (no Docker needed).
+tasks.register<Test>("testPostgresMode") {
+	description = "Runs the tests against H2 in PostgreSQL mode"
+	group = "verification"
+	useJUnitPlatform()
+	testClassesDirs = sourceSets["test"].output.classesDirs
+	classpath = sourceSets["test"].runtimeClasspath
+	systemProperty("spring.datasource.url",
+		"jdbc:h2:mem:pg;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH")
+	shouldRunAfter(tasks.test)
 }

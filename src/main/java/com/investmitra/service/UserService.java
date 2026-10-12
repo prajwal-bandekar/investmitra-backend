@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -41,7 +42,12 @@ public class UserService {
 		user.setPasswordHash(passwords.encode(request.password()));
 		user.setRole(request.role());
 		user.setCashBalance(startingCash);
-		return view(users.save(user));
+		try {
+			return view(users.saveAndFlush(user));
+		} catch (DataIntegrityViolationException e) {
+			// Two signups with the same email raced past the check above; the unique index caught it.
+			throw ApiException.conflict("Email already registered: " + email);
+		}
 	}
 
 	/** Checks email and password. The same error is used for both so emails can't be probed. */

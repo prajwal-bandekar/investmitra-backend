@@ -11,6 +11,8 @@ import com.investmitra.entity.Trade;
 
 public interface TradeRepository extends JpaRepository<Trade, Long> {
 
+	java.util.Optional<Trade> findByPortfolioAndClientRequestId(Portfolio portfolio, String clientRequestId);
+
 	@Query("select t from Trade t join fetch t.stock where t.portfolio = :portfolio order by t.executedAt desc, t.id desc")
 	List<Trade> findByPortfolioNewestFirst(@Param("portfolio") Portfolio portfolio);
 

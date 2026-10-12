@@ -35,7 +35,7 @@ public final class ExpenseDtos {
 
 	// ---- Expenses ----
 
-	/** @param spentOn defaults to today (IST); paymentMode defaults to UPI */
+	/** @param spentOn defaults to today (IST), must be within the last 2 years and at most tomorrow; paymentMode defaults to UPI */
 	public record ExpenseRequest(@NotNull @DecimalMin("0.01") @Digits(integer = 12, fraction = 2) BigDecimal amount,
 			@NotNull Long categoryId, LocalDate spentOn, PaymentMode paymentMode, @Size(max = 200) String note,
 			ExpenseSource source) {
@@ -58,7 +58,7 @@ public final class ExpenseDtos {
 	}
 
 	public record BudgetRequest(@NotNull @Pattern(regexp = MONTH_PATTERN) String month,
-			@NotNull @Valid List<BudgetItem> items) {
+			@NotNull @Size(max = 50) @Valid List<BudgetItem> items) {
 	}
 
 	public record BudgetView(Long categoryId, String category, BigDecimal limit) {
@@ -67,7 +67,7 @@ public final class ExpenseDtos {
 	// ---- Summary ----
 
 	public record CategorySpend(Long categoryId, String name, String icon, boolean want, BigDecimal spent, long count,
-			BigDecimal budget) {
+			BigDecimal budget, boolean archived) {
 	}
 
 	/**

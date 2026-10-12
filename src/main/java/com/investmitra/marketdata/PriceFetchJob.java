@@ -16,13 +16,19 @@ public class PriceFetchJob {
 	private static final Logger log = LoggerFactory.getLogger(PriceFetchJob.class);
 
 	private final MarketDataService marketData;
+	private final AlphaVantageClient client;
 
-	public PriceFetchJob(MarketDataService marketData) {
+	public PriceFetchJob(MarketDataService marketData, AlphaVantageClient client) {
+		this.client = client;
 		this.marketData = marketData;
 	}
 
 	@Scheduled(cron = "${pricejob.cron}", zone = "Asia/Kolkata")
 	public void run() {
+		if (!client.isConfigured()) {
+			log.info("Price job skipped: ALPHAVANTAGE_API_KEY is not set");
+			return;
+		}
 		try {
 			JobRun run = marketData.refreshTrackedStocks(FetchTrigger.SCHEDULED);
 			log.info("Price job {}: {} calls, {} saved, {} failures. {}", run.getStatus(), run.getCallsMade(),

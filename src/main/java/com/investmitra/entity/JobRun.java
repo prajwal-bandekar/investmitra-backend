@@ -14,14 +14,17 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Audit row for one batch of Alpha Vantage calls: a daily job run, a manual run,
- * or a single on-demand quote. Summing {@code callsMade} gives today's quota usage.
+ * Audit row for one batch of Alpha Vantage calls (a daily job run, a manual run,
+ * or a single on-demand quote) or one bhavcopy import. Summing {@code callsMade} gives today's quota usage.
  */
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
 public class JobRun {
+
+	public static final String SOURCE_ALPHA_VANTAGE = "ALPHA_VANTAGE";
+	public static final String SOURCE_BHAVCOPY = "BHAVCOPY";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,6 +45,10 @@ public class JobRun {
 
 	/** API calls actually sent; counted against the daily budget. */
 	private int callsMade;
+
+	/** SOURCE_ALPHA_VANTAGE or SOURCE_BHAVCOPY. Null on rows from before this column existed means Alpha Vantage. */
+	@Column(name = "source")
+	private String source;
 
 	private int pricesSaved;
 
