@@ -1,5 +1,5 @@
-# --- Build stage: Gradle wrapper on a full JDK 25 ---
-FROM amazoncorretto:25 AS build
+# --- Build stage: Gradle wrapper on a full JDK 25 (Temurin: the Corretto image lacks xargs, which gradlew needs) ---
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 # gradle.properties (local JDK path) is excluded by .dockerignore, so the image JDK is used as is.
 COPY gradlew settings.gradle.kts build.gradle.kts ./
