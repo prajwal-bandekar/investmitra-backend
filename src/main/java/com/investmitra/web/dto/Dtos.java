@@ -118,7 +118,8 @@ public final class Dtos {
 
 		public static JobRunView of(JobRun r) {
 			return new JobRunView(r.getId(), r.getTrigger(), r.getStatus(), r.getStartedAt(), r.getFinishedAt(),
-					r.getCallsMade(), r.getPricesSaved(), r.getFailures(), r.getNotes(),
+					r.getCallsMade(), r.getPricesSaved(), r.getFailures(),
+					com.investmitra.marketdata.SecretMasker.mask(r.getNotes()),
 					r.getSource() == null ? JobRun.SOURCE_ALPHA_VANTAGE : r.getSource());
 		}
 	}

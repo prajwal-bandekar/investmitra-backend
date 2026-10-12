@@ -167,7 +167,7 @@ public class MarketDataService {
 			Thread.currentThread().interrupt();
 			return finishRun(run, JobStatus.FAILED, "Interrupted");
 		} catch (RuntimeException e) {
-			log.error("Price refresh failed", e);
+			log.error("Price refresh failed: {}", SecretMasker.mask(e.getMessage()));
 			return finishRun(run, JobStatus.FAILED, e.getMessage());
 		} finally {
 			apiLock.unlock();
@@ -224,7 +224,8 @@ public class MarketDataService {
 		run.setStatus(status);
 		run.setFinishedAt(Instant.now(clock));
 		if (notes != null && !notes.isBlank()) {
-			run.setNotes(notes.length() > 2000 ? notes.substring(0, 2000) : notes);
+			String safe = SecretMasker.mask(notes);
+			run.setNotes(safe.length() > 2000 ? safe.substring(0, 2000) : safe);
 		}
 		return jobRuns.save(run);
 	}

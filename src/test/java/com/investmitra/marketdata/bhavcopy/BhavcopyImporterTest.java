@@ -221,6 +221,21 @@ class BhavcopyImporterTest {
 	}
 
 	@Test
+	void searchPutsExactSymbolThenPrefixBeforeOtherMatches() {
+		for (String[] r : new String[][] { { "ZQRCOM", "ZQRELIANCE Communications" }, { "ZQRELIANCEX", "Other" },
+				{ "ZQRELIANCE", "Exact Co" }, { "AAZQ1", "contains zqreliance in name" } }) {
+			Stock s = new Stock();
+			s.setSymbol(r[0]);
+			s.setName(r[1]);
+			s.setSector("Other");
+			stockRepo.save(s);
+		}
+		List<String> order = stockRepo.search("zqreliance", null, org.springframework.data.domain.PageRequest.of(0, 10))
+				.map(Stock::getSymbol).getContent();
+		assertThat(order).containsExactly("ZQRELIANCE", "ZQRELIANCEX", "AAZQ1", "ZQRCOM");
+	}
+
+	@Test
 	void onDemandQuoteForUnpricedUntrackedStockDoesNotCallAlphaVantage() {
 		Stock s = new Stock();
 		s.setSymbol("ZZNOPRICE");

@@ -21,6 +21,7 @@ public class AlphaVantageClient {
 		this.restClient = builder.baseUrl(props.baseUrl()).build();
 		this.props = props;
 		this.mapper = mapper;
+		SecretMasker.register(props.apiKey());
 	}
 
 	public boolean isConfigured() {

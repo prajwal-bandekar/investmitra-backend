@@ -4,11 +4,11 @@ package com.investmitra.marketdata;
 public class AlphaVantageException extends RuntimeException {
 
 	public AlphaVantageException(String message) {
-		super(message);
+		super(SecretMasker.mask(message));
 	}
 
 	public AlphaVantageException(String message, Throwable cause) {
-		super(message, cause);
+		super(SecretMasker.mask(message), cause);
 	}
 
 	/** Daily or per-second limit hit. Further calls today are pointless. */

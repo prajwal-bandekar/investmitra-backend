@@ -22,7 +22,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 			  and (cast(:q as string) is null
 			       or lower(s.symbol) like lower(concat('%', cast(:q as string), '%'))
 			       or lower(s.name) like lower(concat('%', cast(:q as string), '%')))
-			order by case when exists (select 1 from StockPrice p where p.stock = s) then 0 else 1 end, s.symbol
+			order by case when lower(s.symbol) = lower(cast(:q as string)) then 0
+			              when lower(s.symbol) like lower(concat(cast(:q as string), '%')) then 1
+			              else 2 end,
+			         case when exists (select 1 from StockPrice p where p.stock = s) then 0 else 1 end, s.symbol
 			""")
 	Page<Stock> search(@Param("q") String query, @Param("sector") String sector, Pageable pageable);
 

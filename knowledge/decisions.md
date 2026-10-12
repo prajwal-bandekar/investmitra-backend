@@ -122,3 +122,9 @@ Format: date, decision, why, alternatives rejected, status. Dates are when the d
 - Chosen: Docker web service on Render free, Neon Postgres, `prod` profile, shared-secret filter (`X-Access-Key`, plus `X-Admin-Key` for `/api/admin/**`), cron-job.org ping on `/api/health`.
 - Rejected for now: JWT login (owner chose the simple gate; keys are one shared secret, not per-user); Testcontainers for Postgres (needs Docker; H2 PostgreSQL mode used instead, which does not catch every dialect difference); a Spring Security filter chain (extra dependency for a one-secret check).
 - The filter runs before Spring CORS, so it adds `Access-Control-Allow-Origin` itself on rejections for allowed origins.
+
+## 2026-10-13 Mask the Alpha Vantage key at the exception, on write and on read
+- Masking lives in the `AlphaVantageException` constructors, so every message that leaves the Alpha Vantage path is already clean. `finishRun` and `JobRunView.of` mask again because rows saved before the fix still hold the key, and a read-time mask fixes them without a data migration.
+- The configured key is only matched literally when it has 8+ characters (a short test key such as "key" would blank ordinary words). The regex patterns catch the key either way.
+- Rejected: a one-off SQL update of old `job_run.notes` (needs DB access on each environment; the read mask covers it). The leaked key should still be rotated at Alpha Vantage.
+- Search ranking uses a JPQL `case` over `lower(symbol)` rather than native SQL, so it stays portable between MySQL and PostgreSQL.

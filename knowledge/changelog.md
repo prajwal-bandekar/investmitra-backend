@@ -52,3 +52,8 @@ Newest at the bottom. Append one `## YYYY-MM-DD` section per ingest.
 - Postgres audit: wrapped nullable query params in `cast(... as string/long)` in `StockRepository.search` and `ExpenseRepository.find` (Postgres cannot infer the type of `:p is null` and fails on `lower(bytea)`). No other MySQL-specific SQL, `@Lob` or reserved words found.
 - Gradle task `testPostgresMode` runs the suite on H2 in PostgreSQL mode. 89 tests (1 skipped) pass on both `test` and `testPostgresMode`.
 - `PriceFetchJob` skips quietly when the Alpha Vantage key is empty (previously wrote a FAILED job run daily).
+
+## 2026-10-13
+- Security: Alpha Vantage error text can contain the API key ("We have detected your API key as ..."). New `marketdata/SecretMasker` replaces the configured key (when 8+ characters), `API key as <token>` and `apikey=<token>` with `****`. Applied in `AlphaVantageException` constructors (so notes, API errors and logs are clean), in `MarketDataService.finishRun` (stored notes) and in `JobRunView.of` (rows stored earlier are masked on read). The generic refresh error log prints the masked message only, not the stack trace.
+- `StockRepository.search` ranks an exact symbol match first, then symbols starting with the query, then the rest, then has-price and symbol. JPQL `case` with `lower()`, keeps the `cast(:q as string)` null-safety; works on H2 (MySQL and PostgreSQL modes).
+- Tests: `SecretMaskerTest` (4), search ranking test in `BhavcopyImporterTest`. 94 tests (1 skipped) pass on `test` and `testPostgresMode`.
