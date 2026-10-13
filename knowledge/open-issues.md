@@ -62,3 +62,11 @@
 - `testPostgresMode` uses H2 PostgreSQL mode, not a real Postgres; verify on Neon (DDL via `ddl-auto=update`, queries) after the first deploy.
 - Access key is a single shared secret sent from the browser; anyone with the frontend bundle can read it. Replace with JWT login later.
 - Scheduled jobs only run while the free instance is awake; if the keep-alive ping fails at 19:30 IST the import is missed (run the backfill curl).
+
+## Found in review 2026-10-13 (not fixed yet)
+- **Security, admin-key bypass:** `AccessKeyFilter.isAdminPath` checks the raw `getRequestURI()`. `/api/admin;x/...` (matrix parameter) and `/api/%61dmin/...` (percent-encoded) skip the admin-key check but Spring still routes them to the admin controllers. Fix: check the normalised path Spring matches on, or reject `;` and `%` in `/api` paths.
+- **Postgres risk:** `ExpenseRepository.find` casts `:categoryId` but not `:mode` (`:mode is null`). Verify History with no filters on Neon.
+- **Import race:** bhavcopy import and Alpha Vantage writes don't share a lock; a duplicate (stock, date) row fails a whole 500-row batch and marks the import FAILED.
+- **Retries after PARTIAL:** `BhavcopyImporter.importedSince` counts only SUCCESS, so the 20:00 and 20:30 retries re-download after a PARTIAL import (likely intended, to pick up NSE).
+
+- Enum columns (`CommitmentKind`, `PaymentMode`, ...) may get a CHECK constraint from Hibernate on PostgreSQL, so adding an enum value later may need a manual `ALTER` on Neon (unverified).
