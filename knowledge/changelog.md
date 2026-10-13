@@ -57,3 +57,9 @@ Newest at the bottom. Append one `## YYYY-MM-DD` section per ingest.
 - Security: Alpha Vantage error text can contain the API key ("We have detected your API key as ..."). New `marketdata/SecretMasker` replaces the configured key (when 8+ characters), `API key as <token>` and `apikey=<token>` with `****`. Applied in `AlphaVantageException` constructors (so notes, API errors and logs are clean), in `MarketDataService.finishRun` (stored notes) and in `JobRunView.of` (rows stored earlier are masked on read). The generic refresh error log prints the masked message only, not the stack trace.
 - `StockRepository.search` ranks an exact symbol match first, then symbols starting with the query, then the rest, then has-price and symbol. JPQL `case` with `lower()`, keeps the `cast(:q as string)` null-safety; works on H2 (MySQL and PostgreSQL modes).
 - Tests: `SecretMaskerTest` (4), search ranking test in `BhavcopyImporterTest`. 94 tests (1 skipped) pass on `test` and `testPostgresMode`.
+
+## 2026-10-13 (Free to spend)
+- New in `com.investmitra.expense`: entities `SalarySetting`, `ExtraIncome`, `Commitment` (+ `CommitmentKind`), their repositories, `PlanService`, `PlanController`, `PlanDtos`.
+- New endpoints: `GET /api/plan`, `PUT /api/plan/salary`, `GET/POST /api/commitments`, `PUT/DELETE /api/commitments/{id}`, `GET/POST /api/extra-income`, `DELETE /api/extra-income/{id}`.
+- Tables `salary_setting`, `extra_income`, `commitment` are created by `ddl-auto=update`; column names avoid reserved words.
+- `PlanIntegrationTest` (12 tests). 106 tests (1 skipped) pass on `test` and `testPostgresMode`.

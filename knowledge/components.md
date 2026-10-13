@@ -34,6 +34,7 @@ Base path: `src/main/java/com/investmitra/`. Constructor injection everywhere.
 - **ExpenseController** `/api/expense-categories`, `/api/expenses`, `/api/expenses/summary`, `/api/budgets`.
 - **ExpenseSeeder**: seeds default categories and wish products when their tables are empty.
 - **ExpenseDtos**: request/response records for the module.
+- **Free to spend (2026-10-13)**: entities `SalarySetting`, `ExtraIncome`, `Commitment` (enum `CommitmentKind`) with repositories; **PlanService** (plan maths, salary upsert under the user-row lock, commitment and extra-income CRUD, 404 for others' rows); **PlanController** `/api/plan`, `/api/plan/salary`, `/api/commitments`, `/api/extra-income`; **PlanDtos** records. Reuses `ExpenseRepository.total` for spent.
 
 ## repository (Spring Data)
 `AppUserRepository` (`findByIdForUpdate` with PESSIMISTIC_WRITE, `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`), `StockRepository` (`findBySymbolIgnoreCase`, `findByAvSymbolIsNotNull`, `search`, `sectorSummary`), `StockPriceRepository` (`findTopByStockOrderByTradeDateDesc`, `findByStockAndTradeDate`, `findLatestFor(ids)`), `HoldingRepository` (`findByPortfolioAndStock`, `findByPortfolio`, `findByPortfolioIn`, `findManagedByUserIn`), `PortfolioRepository` (`findManagedBy(userId)`), `TradeRepository` (`totalRealizedPnl`, `findByPortfolioNewestFirst`), `WatchlistItemRepository`, `JobRunRepository` (`findTop20ByOrderByStartedAtDesc`, `callsMadeSince(instant)`).

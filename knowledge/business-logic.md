@@ -52,6 +52,16 @@ One row per (user, stock). POST on an existing symbol updates the target price. 
 - Summary: month total, last month total, per-category spend (sorted by spend) with count and budget.
 - **Could-have-bought cards**: for each `want` category with spend from 1 Jan to the end of the selected month (year to date), pick the priciest active `WishProduct` whose price <= spend; `count` = floor(spend / price). If spend is below the cheapest product, show that product with `progressPercent` = floor(spend * 100 / price). `investShares` = floor(spend / last close of `expense.invest-symbol`, default RELIANCE), null when no stored price. Uses stored prices only, so no Alpha Vantage calls.
 
+## Free to spend (`PlanService`, 2026-10-13)
+- Months are calendar months (YYYY-MM, IST). No rollover: each month starts fresh from its own income and commitments.
+- Salary for month M = the `SalarySetting` with the greatest `effectiveMonth <= M`; none means `salary` null and income 0. `PUT /plan/salary` upserts the row for the given month, so earlier months keep their old salary.
+- `totalIncome` = salary (or 0) + sum of that month's `ExtraIncome`.
+- A `Commitment` is active in M when `startMonth <= M` and (`endMonth` null or `endMonth >= M`). `endMonth < startMonth` gives 400. `SAVINGS` counts in `savingsTotal` (set aside), everything else in `committedTotal`.
+- `freeToSpend` = totalIncome - committedTotal - savingsTotal (may be negative); `spent` = month's expenses; `remaining` = freeToSpend - spent (may be negative).
+- `daysLeft`: current month = days from today to month end inclusive; future month = days in month; past month = 0. `dailyAllowance` = remaining / daysLeft rounded down to whole rupees, null when daysLeft is 0 or remaining <= 0.
+- `committedPercent` = round(committedTotal * 100 / totalIncome), HALF_UP, null when totalIncome is 0 (savings not included).
+- `endingSoon`: active commitments with an `endMonth <= month + 2`. `monthsLeft` = months from the requested/current month to `endMonth` inclusive (0 once ended).
+
 ## Bhavcopy daily import
 - `BhavcopyImporter.importDay(date, trigger)`: fetches NSE (primary) and BSE; BSE only contributes companies whose ISIN is not in NSE's file. Equity rows only (`isEquity()`). Rows whose trade date differs from the requested date, or whose close is <= 0, are skipped and counted in the notes; a file whose rows are all for another date counts as "not published" (note "file is for <date>"). Malformed CSV lines are skipped and counted by the parser (`ParsedRows.skipped()`); the parse fails only if more than half the data rows are bad.
 - Stock matching: by ISIN first; else by symbol (case-insensitive) if that stock has no ISIN yet (ISIN is then set); else a new Stock is created (symbol = ticker, name = FinInstrmNm, sector `Other`, avSymbol null). A BSE-only ticker already used by a different ISIN is skipped and counted in the notes.

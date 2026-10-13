@@ -15,6 +15,9 @@ MySQL 8 schema `investmitra`, created by Hibernate (`ddl-auto=update`, no migrat
 | **ExpenseCategory** (`expense_category`) | id, user_id (null = shared default), name, icon, want, archived | 10 defaults seeded by `ExpenseSeeder` |
 | **Expense** (`expense`) | id, user_id, category_id, amount (19,2), spentOn, paymentMode (`UPI`/`CASH`/`CARD`/`NETBANKING`/`OTHER`), source (`MANUAL`/`SMS`), note, createdAt | index (user_id, spentOn) |
 | **Budget** (`budget`) | id, user_id, category_id (null = overall cap), month (column `budget_month`, `YYYY-MM`; `month` is reserved in H2), limitAmount (19,2) | unique (user_id, category_id, budget_month); MySQL allows duplicate NULLs, so the service upserts the overall row itself |
+| **SalarySetting** (`salary_setting`) | id, user_id, effectiveMonth (column `effective_month`, `YYYY-MM`), amount (19,2) | unique (user_id, effective_month); salary for month M = row with the greatest effective_month <= M |
+| **ExtraIncome** (`extra_income`) | id, user_id, incomeMonth (column `income_month`), amount (19,2), label (60), createdAt | one-off income in one month |
+| **Commitment** (`commitment`) | id, user_id, name (60), kind (column `commitment_kind`: `EMI`/`BNPL`/`INSURANCE`/`SUBSCRIPTION`/`RENT`/`SAVINGS`/`OTHER`), amount (19,2), dueDay (1-31), startMonth (`start_month`), endMonth (`end_month`, null = no end), createdAt | active in M when start_month <= M and (end_month null or >= M); column names avoid reserved words |
 | **WishProduct** (`wish_product`) | id, name (unique), price (19,2), image (illustration key), active | 9 seeded, approximate Indian prices; edit rows to update |
 
 ## Relationships
@@ -24,6 +27,7 @@ Portfolio 1--* Holding *--1 Stock   Portfolio 1--* Trade *--1 Stock
 Trade *--1 AppUser (placedBy)       AppUser 1--* WatchlistItem *--1 Stock
 Stock 1--* StockPrice
 AppUser 1--* Expense *--1 ExpenseCategory   AppUser 1--* Budget *--0..1 ExpenseCategory
+AppUser 1--* SalarySetting / ExtraIncome / Commitment
 ```
 Notes: cash is per user, not per portfolio. Table names are Spring's default snake_case of the entity names (not independently checked in MySQL). The column is `run_trigger` because `trigger` is a reserved word. Enums: `Role`, `TradeSide`, `FetchTrigger`, `JobStatus`.
 Seed data: `Stock` rows come from `nse-500-stocks.json` on first start. Users are not seeded by code.

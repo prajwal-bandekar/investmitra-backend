@@ -128,3 +128,9 @@ Format: date, decision, why, alternatives rejected, status. Dates are when the d
 - The configured key is only matched literally when it has 8+ characters (a short test key such as "key" would blank ordinary words). The regex patterns catch the key either way.
 - Rejected: a one-off SQL update of old `job_run.notes` (needs DB access on each environment; the read mask covers it). The leaked key should still be rotated at Alpha Vantage.
 - Search ranking uses a JPQL `case` over `lower(symbol)` rather than native SQL, so it stays portable between MySQL and PostgreSQL.
+
+## D22 Free to spend: salary effective-from rows, calendar months, no rollover (2026-10-13)
+- **Decision:** One `SalarySetting` row per (user, effective month); the salary for a month is the latest row at or before it, so a raise never rewrites history. Months are calendar months in IST. Unspent money resets each month. One-off income goes in `ExtraIncome`. Fixed outgo goes in `Commitment` rows with a start and optional end month; `SAVINGS` is set aside, not committed. `freeToSpend` and `remaining` may go negative and are shown as is.
+- **Why:** Keeps one headline number ("Free to spend") and makes past months stable. Derived queries and Java filtering avoid dialect trouble on PostgreSQL.
+- **Rejected:** Payday-to-payday months (harder to explain, breaks the expense month model); carrying unspent money forward (rollover); a single salary field on the user (a change would rewrite earlier months); clearing the salary (not needed yet, amount 0 is a 400).
+- **Status:** Done (backend). Frontend work is in the sibling repo.

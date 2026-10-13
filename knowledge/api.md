@@ -62,6 +62,26 @@ Months are `YYYY-MM`; omitted means the current IST month; anything else gives 4
 
 `WishCard {categoryId, category, icon, spent, productName, productImage, productPrice, count, progressPercent, investSymbol, investShares}`; see business-logic.md.
 
+## Free to spend (plan; all rows scoped to `X-User-Id`, 2026-10-13)
+Months are `YYYY-MM`, omitted means the current IST month, invalid gives 400. Someone else's commitment or extra income answers 404. Amounts: >= 0.01, up to 12 digits and 2 decimals (0 gives 400).
+
+| Method, path | Request | Response |
+|---|---|---|
+| GET `/plan?month` | | `PlanView` |
+| PUT `/plan/salary` | `{month?, amount}` | `PlanView` for that month; upserts the salary effective from `month` onward |
+| GET `/commitments` | | `CommitmentView[]`, all (active and ended), newest `startMonth` first; `monthsLeft`/`active` are for the current month |
+| POST `/commitments` | `{name (<= 60), kind, amount, dueDay (1-31), startMonth? (default current), endMonth? (null = no end, must be >= startMonth else 400)}` | 201 `CommitmentView` |
+| PUT `/commitments/{id}` | same body | `CommitmentView` |
+| DELETE `/commitments/{id}` | | `data: null` |
+| GET `/extra-income?month` | | `ExtraIncomeView[]` newest first |
+| POST `/extra-income` | `{month?, amount, label (<= 60, not blank)}` | 201 `ExtraIncomeView` |
+| DELETE `/extra-income/{id}` | | `data: null` |
+
+`kind`: `EMI`, `BNPL`, `INSURANCE`, `SUBSCRIPTION`, `RENT`, `SAVINGS`, `OTHER`.
+`CommitmentView {id, name, kind, amount, dueDay, startMonth, endMonth, monthsLeft (months from the requested/current month to endMonth inclusive; null with no end; 0 once ended), active}`.
+`ExtraIncomeView {id, month, amount, label}`.
+`PlanView {month, salary (null if never set), salaryFromMonth, extraIncome, totalIncome, commitments[CommitmentView] (active in month), committedTotal (non-SAVINGS), savingsTotal, freeToSpend, spent, remaining, daysLeft, dailyAllowance (whole rupees, scale 0; null when daysLeft is 0 or remaining <= 0), committedPercent (null when totalIncome is 0), endingSoon[{id, name, amount, endMonth}]}`.
+
 ## Admin price job (no auth yet)
 | Method, path | Response |
 |---|---|
