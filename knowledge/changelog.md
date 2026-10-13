@@ -63,3 +63,9 @@ Newest at the bottom. Append one `## YYYY-MM-DD` section per ingest.
 - New endpoints: `GET /api/plan`, `PUT /api/plan/salary`, `GET/POST /api/commitments`, `PUT/DELETE /api/commitments/{id}`, `GET/POST /api/extra-income`, `DELETE /api/extra-income/{id}`.
 - Tables `salary_setting`, `extra_income`, `commitment` are created by `ddl-auto=update`; column names avoid reserved words.
 - `PlanIntegrationTest` (12 tests). 106 tests (1 skipped) pass on `test` and `testPostgresMode`.
+
+## 2026-10-13 (Free to spend: review fixes)
+- `month` query params of `GET /api/plan` and `GET /api/extra-income` are checked strictly against the month pattern (400 "Month must look like 2026-10"). `ExpenseService` unchanged.
+- Test cleanup in `ExpenseIntegrationTest` and `InvestMitraIntegrationTest` also clears commitments, extra income and salary rows before users.
+- `PlanIntegrationTest`: MockMvc HTTP test, endMonth-equals-month, other-user isolation, malformed month tests. Unused imports removed from `SalarySetting`/`ExtraIncome`.
+- `POST /api/commitments` and `POST /api/extra-income` now answer HTTP 201 (`@ResponseStatus`), not just the envelope statusCode.

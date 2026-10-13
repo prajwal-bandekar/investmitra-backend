@@ -68,3 +68,5 @@
 - **Postgres risk:** `ExpenseRepository.find` casts `:categoryId` but not `:mode` (`:mode is null`). Verify History with no filters on Neon.
 - **Import race:** bhavcopy import and Alpha Vantage writes don't share a lock; a duplicate (stock, date) row fails a whole 500-row batch and marks the import FAILED.
 - **Retries after PARTIAL:** `BhavcopyImporter.importedSince` counts only SUCCESS, so the 20:00 and 20:30 retries re-download after a PARTIAL import (likely intended, to pick up NSE).
+
+- Enum columns (`CommitmentKind`, `PaymentMode`, ...) may get a CHECK constraint from Hibernate on PostgreSQL, so adding an enum value later may need a manual `ALTER` on Neon (unverified).

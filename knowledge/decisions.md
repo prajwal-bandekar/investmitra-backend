@@ -134,3 +134,5 @@ Format: date, decision, why, alternatives rejected, status. Dates are when the d
 - **Why:** Keeps one headline number ("Free to spend") and makes past months stable. Derived queries and Java filtering avoid dialect trouble on PostgreSQL.
 - **Rejected:** Payday-to-payday months (harder to explain, breaks the expense month model); carrying unspent money forward (rollover); a single salary field on the user (a change would rewrite earlier months); clearing the salary (not needed yet, amount 0 is a 400).
 - **Status:** Done (backend). Frontend work is in the sibling repo.
+
+- D22 note: editing or deleting a commitment rewrites past months too (accepted, no per-month snapshots). To stop one from a given month, the UI should set an end month instead of deleting it.

@@ -2,6 +2,7 @@ package com.investmitra.expense;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.investmitra.expense.PlanDtos.CommitmentRequest;
@@ -52,6 +54,7 @@ public class PlanController {
 	}
 
 	@PostMapping("/commitments")
+	@ResponseStatus(HttpStatus.CREATED)
 	public ResponseStructure<CommitmentView> createCommitment(@RequestHeader("X-User-Id") Long userId,
 			@Valid @RequestBody CommitmentRequest request) {
 		return ResponseStructure.created(service.createCommitment(userId, request), "Commitment added");
@@ -76,6 +79,7 @@ public class PlanController {
 	}
 
 	@PostMapping("/extra-income")
+	@ResponseStatus(HttpStatus.CREATED)
 	public ResponseStructure<ExtraIncomeView> addExtraIncome(@RequestHeader("X-User-Id") Long userId,
 			@Valid @RequestBody ExtraIncomeRequest request) {
 		return ResponseStructure.created(service.addExtraIncome(userId, request), "Extra income added");

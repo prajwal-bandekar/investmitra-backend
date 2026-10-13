@@ -230,8 +230,12 @@ public class PlanService {
 		if (month == null || month.isBlank()) {
 			return YearMonth.from(today());
 		}
+		String m = month.trim();
+		if (!m.matches(ExpenseDtos.MONTH_PATTERN)) {
+			throw ApiException.badRequest("Month must look like 2026-10");
+		}
 		try {
-			return YearMonth.parse(month.trim());
+			return YearMonth.parse(m);
 		}
 		catch (DateTimeParseException ex) {
 			throw ApiException.badRequest("Month must look like 2026-10");

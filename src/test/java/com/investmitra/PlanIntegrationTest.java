@@ -42,7 +42,17 @@ import com.investmitra.repository.TradeRepository;
 import com.investmitra.repository.WatchlistItemRepository;
 import com.investmitra.service.ApiException;
 import com.investmitra.service.UserService;
+import com.investmitra.web.ApiExceptionHandler;
 import com.investmitra.web.dto.Dtos.CreateUserRequest;
+import com.investmitra.expense.PlanController;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -279,6 +289,56 @@ class PlanIntegrationTest {
 		assertThat(validator.validate(new SalaryRequest("2026-01", new BigDecimal("1")))).isEmpty();
 		assertThat(validator.validate(new ExtraIncomeRequest(null, BigDecimal.ZERO, "Gift"))).hasSize(1);
 		assertThat(validator.validate(new ExtraIncomeRequest(null, BigDecimal.ONE, " "))).hasSize(1);
+	}
+
+	@Test
+	void endMonthEqualToRequestedMonthIsEndingSoonWithOneMonthLeft() {
+		plan.createCommitment(me, commitment("Last one", CommitmentKind.EMI, "800", "2026-01", "2026-04"));
+		PlanView p = plan.plan(me, "2026-04");
+		assertThat(p.endingSoon()).extracting(e -> e.name()).containsExactly("Last one");
+		assertThat(p.commitments().get(0).monthsLeft()).isEqualTo(1);
+	}
+
+	@Test
+	void otherUsersRowsAreExcludedFromPlanTotals() {
+		plan.setSalary(me, new SalaryRequest("2026-01", new BigDecimal("1000")));
+		plan.setSalary(other, new SalaryRequest("2026-01", new BigDecimal("99999")));
+		plan.createCommitment(other, commitment("Their rent", CommitmentKind.RENT, "5000", "2026-01", null));
+		plan.addExtraIncome(other, new ExtraIncomeRequest("2026-02", new BigDecimal("700"), "Theirs"));
+		PlanView p = plan.plan(me, "2026-02");
+		assertThat(p.salary()).isEqualByComparingTo("1000");
+		assertThat(p.extraIncome()).isEqualByComparingTo("0");
+		assertThat(p.commitments()).isEmpty();
+		assertThat(p.freeToSpend()).isEqualByComparingTo("1000");
+	}
+
+	@Test
+	void malformedMonthQueryIsRejected() {
+		for (String bad : new String[] { "2026-1", "2026-13", "2026-10-01", "+2026-10", "abc" }) {
+			assertStatus(() -> plan.plan(me, bad), HttpStatus.BAD_REQUEST);
+			assertStatus(() -> plan.extraIncome(me, bad), HttpStatus.BAD_REQUEST);
+		}
+	}
+
+	@Test
+	void httpLayer() throws Exception {
+		MockMvc mvc = MockMvcBuilders.standaloneSetup(new PlanController(plan))
+				.setControllerAdvice(new ApiExceptionHandler()).build();
+		String body = "{\"name\":\"Rent\",\"kind\":\"RENT\",\"amount\":12000,\"dueDay\":5}";
+
+		mvc.perform(post("/api/commitments").header("X-User-Id", me).contentType(MediaType.APPLICATION_JSON)
+				.content(body)).andExpect(status().isCreated()).andExpect(jsonPath("$.statusCode").value(201))
+				.andExpect(jsonPath("$.data.name").value("Rent")).andExpect(jsonPath("$.data.kind").value("RENT"));
+		mvc.perform(post("/api/commitments").header("X-User-Id", me).contentType(MediaType.APPLICATION_JSON)
+				.content(body.replace("RENT\"", "NOPE\""))).andExpect(status().isBadRequest());
+		mvc.perform(post("/api/commitments").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/plan").header("X-User-Id", me).param("month", "bad")).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Month must look like 2026-10"));
+
+		Long id = plan.commitments(me).get(0).id();
+		mvc.perform(put("/api/commitments/" + id).header("X-User-Id", other).contentType(MediaType.APPLICATION_JSON)
+				.content(body)).andExpect(status().isNotFound());
 	}
 
 	private CommitmentRequest commitment(String name, CommitmentKind kind, String amount, String start, String end) {

@@ -17,6 +17,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.investmitra.entity.Role;
+import com.investmitra.expense.CommitmentRepository;
+import com.investmitra.expense.ExtraIncomeRepository;
+import com.investmitra.expense.SalarySettingRepository;
 import com.investmitra.entity.StockPrice;
 import com.investmitra.expense.BudgetRepository;
 import com.investmitra.expense.ExpenseCategoryRepository;
@@ -60,6 +63,9 @@ class ExpenseIntegrationTest {
 	@Autowired BudgetRepository budgetRepo;
 	@Autowired ExpenseCategoryRepository categoryRepo;
 	@Autowired AppUserRepository userRepo;
+	@Autowired CommitmentRepository commitmentRepo;
+	@Autowired ExtraIncomeRepository extraIncomeRepo;
+	@Autowired SalarySettingRepository salaryRepo;
 	@Autowired StockPriceRepository priceRepo;
 	@Autowired TradeRepository tradeRepo;
 	@Autowired HoldingRepository holdingRepo;
@@ -87,6 +93,9 @@ class ExpenseIntegrationTest {
 		watchlistRepo.deleteAll();
 		portfolioRepo.deleteAll();
 		priceRepo.deleteAll();
+		commitmentRepo.deleteAll();
+		extraIncomeRepo.deleteAll();
+		salaryRepo.deleteAll();
 		userRepo.deleteAll();
 	}
 
